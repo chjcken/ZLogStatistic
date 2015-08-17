@@ -5,7 +5,10 @@
  */
 package com.za.zloganalyzer;
 
+import com.za.zdatabasehelper.ZDatabaseHelper;
 import java.io.Serializable;
+import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.List;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -30,13 +33,20 @@ public class ZLogAnalyzer implements Serializable {
 //    private static JavaSQLContext sqlContext;
     private static final ZLogAnalyzer instance = new ZLogAnalyzer();
 
-    private String pageOverviewSQL = "SELECT idsite,url,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews,SUM(duration) as total_time from logsTable group by idsite,url,path_duration";
-    private String osSQL = "SELECT idsite,os,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,os";
-    private String browserSQL = "SELECT idsite,us_br,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,us_br";
-    private String locationSQL = "SELECT idsite,ct_city,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,ct_city";
-    private String deviceSQL = "SELECT idsite,device,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,device";
-    private String referalSQL = "SELECT idsite,url_ref,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,url_ref";
-    private String appOverviewSQL = "SELECT idsite,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from logsTable  group by idsite";
+    private final String pageOverviewSQL = 
+            "SELECT idsite,url,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews,SUM(duration) as total_time from logsTable group by idsite,url,path_duration";
+    private final String osSQL = 
+            "SELECT idsite,os,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,os";
+    private final String browserSQL = 
+            "SELECT idsite,us_br,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,us_br";
+    private final String locationSQL = 
+            "SELECT idsite,ct_city,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,ct_city";
+    private final String deviceSQL = 
+            "SELECT idsite,device,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,device";
+    private final String referalSQL = 
+            "SELECT idsite,urlref,ref_type,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,urlref,ref_type";
+    private final String appOverviewSQL = 
+            "SELECT idsite,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from logsTable  group by idsite";
 
     private ZLogAnalyzer() {
     }
@@ -68,48 +78,162 @@ public class ZLogAnalyzer implements Serializable {
 
             JavaSchemaRDD schemaRDD = sqlContext.applySchema(accessLogs, ZLogObject.class);
             schemaRDD.registerTempTable(LOG_TABLE);
-            sqlContext.sqlContext().cacheTable(LOG_TABLE);    
+            sqlContext.sqlContext().cacheTable(LOG_TABLE);   
+
+            //calculate pageOverview
+            List<Row> pageOverviewTable = sqlContext.sql(pageOverviewSQL).collect();//missing bound, entrance, exit
             
+            //calculate os
+            List<Row> osTable = sqlContext.sql(osSQL).collect();
             
-            String sql = "SELECT idsite,url,idvisit from logsTable group by idsite,url,idvisit having COUNT(*)=1";
-            JavaSchemaRDD temp = sqlContext.sql(sql);
-            temp.registerTempTable("temp");
-            sqlContext.sqlContext().cacheTable("temp");  
-            String sql1 = "SELECT idsite,url,COUNT(*) as bound from temp group by idsite,url";
-            List<Row> test = sqlContext.sql(sql1).collect();
+            //calculate referal
+            List<Row> referalTable = sqlContext.sql(referalSQL).collect();
             
+            //calculate location
+            List<Row> locationTable = sqlContext.sql(locationSQL).collect();
             
-            for (Row row : test) {
-                System.err.println(String.format("%s\t%s\t%d\t",
-                        row.getString(0), row.getString(1), row.getLong(2)));
+            //calculate device
+            List<Row> deviceTable = sqlContext.sql(deviceSQL).collect();
+            
+            //calculate browser
+            List<Row> browserTable = sqlContext.sql(browserSQL).collect();
+            
+            //calculate app overview
+            List<Row> appOverviewTable = sqlContext.sql(appOverviewSQL).collect();
+
+            ZDatabaseHelper dbHelper = new ZDatabaseHelper("localhost", "root", "qwe123");
+            
+            HashMap<String, int[]> map = new HashMap<>();
+            
+            //insert to db
+            
+            for (Row row : pageOverviewTable) {
+                
+                String appId = row.getString(0);
+                String path = row.getString(1);
+                int pageViews = (int)row.getLong(2);
+                int uniquePageViews = (int)row.getLong(3);
+                int bounds = getBoundOfPage(appId, path, sqlContext);
+                int entrances = getSesstionStartOrExitWithPage(appId, path, sqlContext, false);
+                int exits = getSesstionStartOrExitWithPage(appId, path, sqlContext, true);
+                long totalTimeonPage = row.getLong(4);
+                
+                if (!map.containsKey(appId)){
+                    map.put(appId, new int[]{0, 0, 0, 0, 0});
+                }
+                
+                map.put(appId, 
+                        new int[]{map.get(appId)[0]+= uniquePageViews,
+                            map.get(appId)[1] += bounds, map.get(appId)[2] += entrances,
+                            map.get(appId)[3] += exits, map.get(appId)[4] += totalTimeonPage
+                        });
+                
+                dbHelper.insertIntoPageOverview(appId, path, pageViews,
+                        uniquePageViews, bounds, entrances, exits, totalTimeonPage);                                
             }
             
+            for (Row row : referalTable) {
+                String appId = row.getString(0);
+                String urlRef = row.getString(1);
+                int refType = row.getInt(2);
+                int sessions = (int)row.getLong(3);
+                dbHelper.insertIntoReferal(appId, urlRef, refType, sessions);
+            }
             
+            for (Row row : osTable){
+                String appId = row.getString(0);
+                String osType = row.getString(1);
+                int sessions = (int)row.getLong(2);
+                dbHelper.insertIntoOs(appId, osType, sessions);
+            }
             
+            for (Row row : deviceTable){
+                String appId = row.getString(0);
+                String device = row.getString(1);
+                int sessions = (int)row.getLong(2);
+                dbHelper.insertIntoDevice(appId, device, sessions);
+            }
             
-            //String sql1 = "SELECT idsite,url,COUNT() FROM logs group by iddite,url";
-            //calculate pageOverview
-//            List<Row> pageOverviewTable = sqlContext.sql(pageOverviewSQL).collect();//missing bound, entrance, exit
-//            
-//            
-//            List<Row> osTable = sqlContext.sql(osSQL).collect();
-//            List<Row> referalTable = sqlContext.sql(referalSQL).collect();
-//            List<Row> locationTable = sqlContext.sql(locationSQL).collect();
-//            List<Row> deviceTable = sqlContext.sql(deviceSQL).collect();
-//            List<Row> browserTable = sqlContext.sql(browserSQL).collect();
-
-//            for (Row row : pageOverviewTable) {
-//                System.err.println(String.format("%s\t%s\t%d\t%d\t%d",
-//                        row.getString(0), row.getString(1), row.getLong(2),
-//                        row.getLong(3), row.getLong(4)));
-//            }
+            for (Row row : locationTable){
+                String appId = row.getString(0);
+                String location = row.getString(1);
+                int sessions = (int)row.getLong(2);
+                dbHelper.insertIntoLocation(appId, location, sessions);
+            }
             
+            for (Row row : browserTable){
+                String appId = row.getString(0);
+                String browser = row.getString(1);
+                int sessions = (int)row.getLong(2);
+                dbHelper.insertIntoBrowser(appId, browser, sessions);
+            }
+            
+            for (Row row : appOverviewTable){
+                String appId = row.getString(0);
+                int sessions = (int)row.getLong(1);
+                int pageviews = (int)row.getLong(2);
+                int uniquePageView = map.get(appId)[0];
+                
+                int[] arrVisitor = new int[3];
+                
+                getNewAndReturnVisitor(appId, sqlContext, arrVisitor);
+                
+                //int total = arrVisitor[0];
+                int newVisitor = arrVisitor[2];
+                int returnVisitor = arrVisitor[1];
+                
+                int bounds = map.get(appId)[1];
+                int entrances = map.get(appId)[2];
+                int exits = map.get(appId)[3];
+                long totalSessionDuration = map.get(appId)[4];
+                
+                dbHelper.insertIntoAppOverview(appId, sessions, pageviews, uniquePageView, newVisitor, returnVisitor, bounds, entrances, exits, totalSessionDuration);
+            }
+            
+            dbHelper.close();
             sparkContext.stop();
-        } catch (Exception e) {
+        } catch (ClassNotFoundException | SQLException e) {
             System.err.println(TAG + "error while parsing log: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+    
+    private void getNewAndReturnVisitor(String idSite, JavaSQLContext sqlContext, int[] arr) {
+        //Total Visitor ,     //Return visitor ,    //New Visitor 
+        String sqlTotal = "Select distinct id from logsTable where idsite='" + idSite + "'";
+        int totalVS = sqlContext.sql(sqlTotal).collect().size();
+        String sqlParent = "Select id from logsTable where idsite='" + idSite + "' group by id having min(new_visitor)=0";
+        int numResturn = sqlContext.sql(sqlParent).collect().size();
+        int numNew = totalVS - numResturn;
+        arr[0] = totalVS;
+        arr[1] = numResturn;// return
+        arr[2] = numNew;// new
+    }
 
+    private int getBoundOfPage(String idSite, String page, JavaSQLContext sqlContext) {
+        int bounce = 0;
+        String sql = "SELECT idvisit from logsTable where idsite='" + idSite + "' and url='" + page + "' group by idvisit having COUNT(*)=1";
+        bounce = sqlContext.sql(sql).collect().size();
+        return bounce;
+    }
+
+    private int getSesstionStartOrExitWithPage(String idSite, String page, JavaSQLContext sqlContext, boolean isExits) {
+        int countSession = 0;
+        String sqlParent = "Select distinct idvisit from logsTable tk where tk.idsite='" + idSite + "' and tk.url='" + page + "'";
+        List<Row> rowParents = sqlContext.sql(sqlParent).collect();
+        for (Row rowParent : rowParents) {
+            String sql = "select url from logsTable tk1 where tk1.idvisit='" + rowParent.get(0) + "' limit 1";
+            if (isExits) {
+                sql = "select url from logsTable tk1 where tk1.idvisit='" + rowParent.get(0) + "' order by idtscr desc limit 1";
+            }
+            Row r = sqlContext.sql(sql).collect().get(0);
+            if (r.getString(0).equals(page)) {
+                countSession++;
+            }
+        }
+        return countSession;
+    }
+    
     public static ZLogAnalyzer getInstance() {
         return instance;
     }
