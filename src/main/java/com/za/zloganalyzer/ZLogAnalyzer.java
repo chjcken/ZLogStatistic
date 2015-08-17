@@ -28,30 +28,27 @@ public class ZLogAnalyzer implements Serializable {
     private final String MASTER = "local[2]";
     private final String LOG_TABLE = "logsTable";
 
-//    private static SparkConf conf;
-//    private static JavaSparkContext sparkContext;
-//    private static JavaSQLContext sqlContext;
     private static final ZLogAnalyzer instance = new ZLogAnalyzer();
 
-    private final String pageOverviewSQL = 
-            "SELECT idsite,url,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews,SUM(duration) as total_time from logsTable group by idsite,url,path_duration";
-    private final String osSQL = 
-            "SELECT idsite,os,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,os";
-    private final String browserSQL = 
-            "SELECT idsite,us_br,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,us_br";
-    private final String locationSQL = 
-            "SELECT idsite,ct_city,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,ct_city";
-    private final String deviceSQL = 
-            "SELECT idsite,device,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,device";
-    private final String referalSQL = 
-            "SELECT idsite,urlref,ref_type,COUNT(DISTINCT idvisit) as sessions from logsTable group by idsite,urlref,ref_type";
-    private final String appOverviewSQL = 
-            "SELECT idsite,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from logsTable  group by idsite";
+    private final String PAGE_OVERVIEW_SQL = 
+            "SELECT idsite,url,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews,SUM(duration) as total_time from " + LOG_TABLE + " group by idsite,url,path_duration";
+    private final String OS_SQL = 
+            "SELECT idsite,os,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by idsite,os";
+    private final String BROWSER_SQL = 
+            "SELECT idsite,us_br,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by idsite,us_br";
+    private final String LOCATION_SQL = 
+            "SELECT idsite,ct_city,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by idsite,ct_city";
+    private final String DEVICE_SQL = 
+            "SELECT idsite,device,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by idsite,device";
+    private final String REFERAL_SQL = 
+            "SELECT idsite,urlref,ref_type,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by idsite,urlref,ref_type";
+    private final String APP_OVERVIEW_SQL = 
+            "SELECT idsite,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from " + LOG_TABLE + "  group by idsite";
 
     private ZLogAnalyzer() {
     }
 
-    public void parse(String logSource) {
+    public void analyze(String logSource) {
         if (logSource == null) {
             throw new NullPointerException("logSource is null.");
         }
@@ -81,25 +78,25 @@ public class ZLogAnalyzer implements Serializable {
             sqlContext.sqlContext().cacheTable(LOG_TABLE);   
 
             //calculate pageOverview
-            List<Row> pageOverviewTable = sqlContext.sql(pageOverviewSQL).collect();//missing bound, entrance, exit
+            List<Row> pageOverviewTable = sqlContext.sql(PAGE_OVERVIEW_SQL).collect();//missing bound, entrance, exit
             
             //calculate os
-            List<Row> osTable = sqlContext.sql(osSQL).collect();
+            List<Row> osTable = sqlContext.sql(OS_SQL).collect();
             
             //calculate referal
-            List<Row> referalTable = sqlContext.sql(referalSQL).collect();
+            List<Row> referalTable = sqlContext.sql(REFERAL_SQL).collect();
             
             //calculate location
-            List<Row> locationTable = sqlContext.sql(locationSQL).collect();
+            List<Row> locationTable = sqlContext.sql(LOCATION_SQL).collect();
             
             //calculate device
-            List<Row> deviceTable = sqlContext.sql(deviceSQL).collect();
+            List<Row> deviceTable = sqlContext.sql(DEVICE_SQL).collect();
             
             //calculate browser
-            List<Row> browserTable = sqlContext.sql(browserSQL).collect();
+            List<Row> browserTable = sqlContext.sql(BROWSER_SQL).collect();
             
             //calculate app overview
-            List<Row> appOverviewTable = sqlContext.sql(appOverviewSQL).collect();
+            List<Row> appOverviewTable = sqlContext.sql(APP_OVERVIEW_SQL).collect();
 
             ZDatabaseHelper dbHelper = new ZDatabaseHelper("localhost", "root", "qwe123");
             
@@ -114,8 +111,8 @@ public class ZLogAnalyzer implements Serializable {
                 int pageViews = (int)row.getLong(2);
                 int uniquePageViews = (int)row.getLong(3);
                 int bounds = getBoundOfPage(appId, path, sqlContext);
-                int entrances = getSesstionStartOrExitWithPage(appId, path, sqlContext, false);
-                int exits = getSesstionStartOrExitWithPage(appId, path, sqlContext, true);
+                int entrances = getSessionStartOrExitWithPage(appId, path, sqlContext, false);
+                int exits = getSessionStartOrExitWithPage(appId, path, sqlContext, true);
                 long totalTimeonPage = row.getLong(4);
                 
                 if (!map.containsKey(appId)){
@@ -200,9 +197,9 @@ public class ZLogAnalyzer implements Serializable {
     
     private void getNewAndReturnVisitor(String idSite, JavaSQLContext sqlContext, int[] arr) {
         //Total Visitor ,     //Return visitor ,    //New Visitor 
-        String sqlTotal = "Select distinct id from logsTable where idsite='" + idSite + "'";
+        String sqlTotal = "Select distinct id from " + LOG_TABLE + " where idsite='" + idSite + "'";
         int totalVS = sqlContext.sql(sqlTotal).collect().size();
-        String sqlParent = "Select id from logsTable where idsite='" + idSite + "' group by id having min(new_visitor)=0";
+        String sqlParent = "Select id from " + LOG_TABLE + " where idsite='" + idSite + "' group by id having min(new_visitor)=0";
         int numResturn = sqlContext.sql(sqlParent).collect().size();
         int numNew = totalVS - numResturn;
         arr[0] = totalVS;
@@ -211,23 +208,23 @@ public class ZLogAnalyzer implements Serializable {
     }
 
     private int getBoundOfPage(String idSite, String page, JavaSQLContext sqlContext) {
-        int bounce = 0;
-        String sql = "SELECT idvisit from logsTable where idsite='" + idSite + "' and url='" + page + "' group by idvisit having COUNT(*)=1";
+        int bounce;
+        String sql = "SELECT idvisit from " + LOG_TABLE + " where idsite='" + idSite + "' and url='" + page + "' group by idvisit having COUNT(*)=1";
         bounce = sqlContext.sql(sql).collect().size();
         return bounce;
     }
 
-    private int getSesstionStartOrExitWithPage(String idSite, String page, JavaSQLContext sqlContext, boolean isExits) {
+    private int getSessionStartOrExitWithPage(String idSite, String page, JavaSQLContext sqlContext, boolean isExits) {
         int countSession = 0;
-        String sqlParent = "Select distinct idvisit from logsTable tk where tk.idsite='" + idSite + "' and tk.url='" + page + "'";
+        String sqlParent = "Select distinct idvisit from " + LOG_TABLE + " tk where tk.idsite='" + idSite + "' and tk.url='" + page + "'";
         List<Row> rowParents = sqlContext.sql(sqlParent).collect();
         for (Row rowParent : rowParents) {
-            String sql = "select url from logsTable tk1 where tk1.idvisit='" + rowParent.get(0) + "' limit 1";
+            String sql = "select url from " + LOG_TABLE + " tk1 where tk1.idvisit='" + rowParent.get(0) + "' limit 1";
             if (isExits) {
-                sql = "select url from logsTable tk1 where tk1.idvisit='" + rowParent.get(0) + "' order by idtscr desc limit 1";
+                sql = "select url from " + LOG_TABLE + " tk1 where tk1.idvisit='" + rowParent.get(0) + "' order by idtscr desc limit 1";
             }
             Row r = sqlContext.sql(sql).collect().get(0);
-            if (r.getString(0).equals(page)) {
+            if (r.getString(0) != null && r.getString(0).equals(page)) {
                 countSession++;
             }
         }
@@ -240,6 +237,6 @@ public class ZLogAnalyzer implements Serializable {
 
     public static void main(String... args) {
         String path = "ZAlog";
-        ZLogAnalyzer.getInstance().parse(path);
+        ZLogAnalyzer.getInstance().analyze(path);
     }
 }
