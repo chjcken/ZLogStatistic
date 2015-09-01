@@ -18,7 +18,7 @@ public class ZSparkSQL {
             + LOG_TABLE +" group by " + APP_ID +"," + PATH;
 
     public static final String PAGE_BOUNCE_TEMP_SQL = "select " + SESSION_ID + " from " + LOG_TABLE 
-            + "group by " + SESSION_ID + " having COUNT(*)=1";
+            + " group by " + SESSION_ID + " having COUNT(*)=1";
 
     public static final String PAGE_ENTRANCE_AND_EXIT_TEMP_SQL = "select " + SESSION_ID 
             + ",min(" + HIT_TIME + ") as " + MIN_TIME + ", max(" + HIT_TIME + ") as " 
@@ -39,7 +39,7 @@ public class ZSparkSQL {
             + " and temp." + MIN_TIME + "=tk." + HIT_TIME + " group by tk." + APP_ID + ",tk." + PATH;
 
     public static final String PAGE_EXIT_SQL = "select tk." + APP_ID + ",tk." + PATH 
-            + ",count(tk." + SESSION_ID + ") as " + ENTRANCES + " from " + PAGE_ENTRANCE_AND_EXIT_TEMP 
+            + ",count(tk." + SESSION_ID + ") as " + EXITS + " from " + PAGE_ENTRANCE_AND_EXIT_TEMP 
             + " as temp, " + LOG_TABLE + " tk where temp." + SESSION_ID + "=tk." + SESSION_ID 
             + " and temp." + MAX_TIME + "=tk." + HIT_TIME + " group by tk." + APP_ID + ",tk." + PATH;
 
@@ -63,9 +63,9 @@ public class ZSparkSQL {
             + SESSION_ID + ") as " + SESSIONS + " from " + LOG_TABLE + " group by " 
             + APP_ID + "," + DEVICE_TYPE;
     
-    public static final String LANGUAGE_SQL = "select " + APP_ID + "," + LANG + ",count(distinct " 
+    public static final String LANGUAGE_SQL = "select " + APP_ID + "," + LANGUAGE + ",count(distinct " 
             + SESSION_ID + ") as " + SESSIONS + " from " + LOG_TABLE + " group by " 
-            + APP_ID + "," + LANG;
+            + APP_ID + "," + LANGUAGE;
 
     public static final String REFERAL_SQL = "select " + APP_ID + "," + URL_REF + "," + REF_TYPE 
             + ",count(distinct " + SESSION_ID 
@@ -80,7 +80,7 @@ public class ZSparkSQL {
             + ") as " + TOTAL_VISITOR + " from " + LOG_TABLE + " group by " + APP_ID;
 
     public static final String APP_RETURN_VISITOR_TEMP_SQL = "select " + APP_ID + "," + VISITOR_ID
-            + "from " + LOG_TABLE + " group by " + APP_ID + "," + VISITOR_ID 
+            + " from " + LOG_TABLE + " group by " + APP_ID + "," + VISITOR_ID 
             + " having min(" + NEW_VISITOR + ")=0";
 
 }

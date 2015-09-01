@@ -44,7 +44,6 @@ public class ZName {
     public static final String OS_TYPE = "os_type";
     public static final String BROWSER_TYPE = "browser_type";
     public static final String DEVICE_TYPE = "device_type";
-    public static final String LANG = "us_lang";
     public static final String URL_REF = "url_ref";
     public static final String REF_TYPE = "ref_type";
     
@@ -73,6 +72,15 @@ public class ZName {
     public static final String TOTAL_VISITOR = "total_visitor";
     
     public static final String RETURN_VISITOR = "return_visitor";
+    
+    public static final String TOTAL_SESSION_DURATION = "total_session_duration";
+    
+    public static final String PAGE_OVERVIEW_TABLE = "page_overview";
+    
+    public static final String APP_OVERVIEW_TABLE = "app_overview";
+    
+    public static final String DATE = "date_tracking";
+    
     
     
 }

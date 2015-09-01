@@ -33,7 +33,7 @@ public class ZLogObject implements Serializable{
     private int new_visitor;
     private String ct_code;
     private String location;
-    private String us_lang;
+    private String language;
     private String browser_type;
     private String os_type;
     private String device_type;
@@ -44,7 +44,7 @@ public class ZLogObject implements Serializable{
             String ref_type, String urlref, String idvc, String viewts, 
             String idts, String idtscr, String idvisit, String res, 
             String java, String fla, String new_visitor, String ct_code, 
-            String ct_city, String us_lang, String us_br, String os, 
+            String ct_city, String language, String us_br, String os, 
             String device, String duration, String path_duration) {
         this.id = id;
         this.app_id = idsite;
@@ -63,7 +63,7 @@ public class ZLogObject implements Serializable{
         this.new_visitor = Integer.parseInt(new_visitor);
         this.ct_code = ct_code;
         this.location = ct_city;
-        this.us_lang = us_lang;
+        this.language = language;
         this.browser_type = us_br;
         this.os_type = os;
         this.device_type = device;
@@ -207,12 +207,12 @@ public class ZLogObject implements Serializable{
         this.location = location;
     }
 
-    public String getUs_lang() {
-        return us_lang;
+    public String getLanguage() {
+        return language;
     }
 
-    public void setUs_lang(String us_lang) {
-        this.us_lang = us_lang;
+    public void setLanguage(String language) {
+        this.language = language;
     }
 
     public String getBrowser_type() {
@@ -279,6 +279,6 @@ public class ZLogObject implements Serializable{
         return String.format("%s %s %s %s %d %s %d %d %d %d %s %s %d %d %d %s %s %s %s %s %s %d %s",
                 id, app_id, action_name, path, ref_type, url_ref, idvc, viewts, 
                 idts, idtscr, idvisit, res, java, fla, new_visitor, ct_code, 
-                location, us_lang, browser_type, os_type, device_type, duration, path_duration);
+                location, language, browser_type, os_type, device_type, duration, path_duration);
     }
 }

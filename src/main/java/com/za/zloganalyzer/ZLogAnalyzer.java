@@ -30,6 +30,7 @@ import com.za.zobject.ZObject;
 import com.za.zobject.ZPageBounceTempObj;
 import com.za.zobject.ZPageEntranceAndExitTempObj;
 import com.za.zobject.ZReferalObj;
+import static com.za.zutil.ZName.*;
 import static com.za.zutil.ZSparkSQL.*;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
@@ -53,29 +54,9 @@ public class ZLogAnalyzer implements Serializable {
 
     private final String TAG = "[ZLogStatistic]\t";
     private final String MASTER = "local[2]";
-    private final String LOG_TABLE = "logsTable";
-    
-    private boolean analyzeDone = false;
 
     private static final ZLogAnalyzer instance = new ZLogAnalyzer();
 
-    private final String PAGE_OVERVIEW_SQL
-            = "SELECT app_id,path,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews from " + LOG_TABLE + " group by app_id,path";
-    private final String OS_SQL
-            = "SELECT app_id,os_type,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by app_id,os_type";
-    private final String BROWSER_SQL
-            = "SELECT app_id,browser_type,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by app_id,browser_type";
-    private final String LOCATION_SQL
-            = "SELECT app_id,location,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by app_id,location";
-    private final String DEVICE_SQL
-            = "SELECT app_id,device_type,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by app_id,device_type";
-    private final String LANGUAGE_SQL
-            = "SELECT app_id,us_lang,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by app_id,us_lang";
-
-    private final String REFERAL_SQL
-            = "SELECT app_id,url_ref,ref_type,COUNT(DISTINCT idvisit) as sessions from " + LOG_TABLE + " group by app_id,url_ref,ref_type";
-    private final String APP_OVERVIEW_SQL
-            = "SELECT app_id,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from " + LOG_TABLE + "  group by app_id";
 
     private ZLogAnalyzer() {
     }
@@ -94,7 +75,7 @@ public class ZLogAnalyzer implements Serializable {
         return sparkContext;        
     }
 
-    public void analyze(String logSource, String tempFolder) {
+    public void parseLogAndWriteDataToTemp(String logSource, String tempFolder) {
         if (logSource == null) {
             throw new NullPointerException("logSource is null.");
         }      
@@ -113,7 +94,7 @@ public class ZLogAnalyzer implements Serializable {
             sparkContext = new JavaSparkContext(sparkConf);
             sqlContext = new SQLContext(sparkContext);
 
-            JavaRDD<ZLogObject> accessLogs = sparkContext.textFile(logSource)
+            JavaRDD<ZLogObject> rawLogRdd = sparkContext.textFile(logSource)
                     .map(new Function<String, ZLogObject>() {
                         @Override
                         public ZLogObject call(String line) throws Exception {
@@ -121,179 +102,31 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            DataFrame dataFrame = 
-                    sqlContext.createDataFrame(accessLogs, ZLogObject.class)
+            DataFrame logDataFrame = 
+                    sqlContext.createDataFrame(rawLogRdd, ZLogObject.class)
                     .persist(StorageLevel.MEMORY_AND_DISK_SER_2());
-            dataFrame.registerTempTable(LOG_TABLE);
-
+            logDataFrame.registerTempTable(LOG_TABLE);
             
-//            DataFrame df = dataFrame.select("idsite", "url").dropDuplicates();  
-//            String sql = "select idsite, idvisit, min(idtscr) as idtscr1 from logsTable group by idsite, idvisit";
-//            DataFrame df2 = sqlContext.sql(sql);//dataFrame.groupBy("idsite","idvisit").min("idtscr");
-//            df2.registerTempTable("temp");
-//            String sql1 = "select tk.idsite,tk.url,count(tk.idvisit) as entrance " +
-//                        "from (select idvisit,min(idtscr) as mintime " +
-//                        "from logsTable group by idvisit) as abc , logsTable tk " +
-//                        "where abc.idvisit=tk.idvisit " +
-//                        "and abc.mintime=tk.idtscr " +
-//                        "group by tk.idsite,tk.url";
-//            DataFrame df3 = sqlContext.sql(sql1);
-//            String pageOverviewSql = "select 0,tk.app_id,tk.path,'"+new Timestamp(System.currentTimeMillis())+"' as date_tracking, tblPage.pageviews,tblPage.unique_pageviews,coalesce(tblBounce.bounces, 0) as bounces,coalesce(tblEntrances.entrances, 0) as entrances,coalesce(tblExits.exits, 0) as exits,coalesce(tblDuration.total_time_on_page, 0) as total_time_on_page from (select tk1.app_id , tk1.path from logsTable tk1 group by tk1.app_id,tk1.path) as tk left join (\n"
-//                    + "SELECT tk.app_id,tk.path,COUNT(tk.idvisit) as bounces from (SELECT idvisit from logsTable group by idvisit having COUNT(*)=1) as tbl, logsTable tk\n"
-//                    + "where tk.idvisit = tbl.idvisit\n"
-//                    + "group by tk.app_id,tk.path) as tblBounce on tblBounce.app_id=tk.app_id and tblBounce.path=tk.path\n"
-//                    + "\n"
-//                    + "left join (select tk.app_id,tk.path,count(tk.idvisit) as entrances\n"
-//                    + "from (select idvisit,min(idtscr) as mintime\n"
-//                    + "from logsTable group by idvisit) as abc, logsTable tk\n"
-//                    + "where abc.idvisit=tk.idvisit\n"
-//                    + "and abc.mintime=tk.idtscr\n"
-//                    + "group by tk.app_id,tk.path) as tblEntrances on tblEntrances.app_id=tk.app_id and tblEntrances.path=tk.path\n"
-//                    + "\n"
-//                    + "left join (select tk.app_id,tk.path,count(tk.idvisit) as exits\n"
-//                    + "from (select idvisit,max(idtscr) as mintime\n"
-//                    + "from logsTable group by idvisit) as abc, logsTable tk\n"
-//                    + "where abc.idvisit=tk.idvisit\n"
-//                    + "and abc.mintime=tk.idtscr\n"
-//                    + "group by tk.app_id,tk.path) as tblExits on tblExits.app_id=tk.app_id and tblExits.path=tk.path\n"
-//                    + "\n"
-//                    + "left join (SELECT app_id,path_duration,SUM(duration) as total_time_on_page from logsTable group by app_id,path_duration) as tblDuration on tblDuration.app_id=tk.app_id and tblDuration.path_duration=tk.path\n"
-//                    + "\n"
-//                    + "left join (SELECT app_id,path,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews from logsTable group by app_id,path)\n"
-//                    + "as tblPage on tblPage.app_id=tk.app_id and tblPage.path=tk.path";
-//
-////            DataFrame df = sqlContext.sql(pageOverviewSql);
-////            
-//            String appOverviewSql = "select 0,app.app_id,'"+new Timestamp(System.currentTimeMillis())+"' as date_tracking,app.sessions,app.pageviews,tblTemp.unique_pageviews,(tblTotal.total_visitor - coalesce(tblReturn.return_visitor,0)) as new_visitors,coalesce(tblReturn.return_visitor,0) as return_visitors,tblTemp.bounces,tblTemp.entrances,tblTemp.exits,\n" +
-//                    "tblTemp.total_time_on_page as total_session_duration\n" +
-//                    "from (SELECT app_id,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from logsTable group by app_id) as app\n" +
-//                    "left join (Select app_id,count(distinct id) as total_visitor from logsTable group by app_id) as tblTotal on app.app_id = tblTotal.app_id\n" +
-//                    "left join (Select app_id,count(id) as return_visitor from (Select app_id,id from logsTable group by app_id,id having min(new_visitor)=0) as tbl group by app_id) as tblReturn on app.app_id = tblReturn.app_id " +
-//                    "left join (select app_id, sum(unique_pageviews) as unique_pageviews, sum(bounces) as bounces, sum(entrances) as entrances, sum(exits) as exits, sum(total_time_on_page) as total_time_on_page from temp group by app_id) as tblTemp on app.app_id=tblTemp.app_id";
-//            
-////
-////            //calculate pageOverview
-//            DataFrame pageOverviewTable = sqlContext.sql(pageOverviewSql);
-//            pageOverviewTable.registerTempTable("temp");
-            //calculate os
-//            DataFrame osTable = sqlContext.sql(OS_SQL);
-            //  String path;
-//            String url = "jdbc:mysql://localhost/zanalytics";
-//            String table = "page_overview";
-//            Properties prop = new Properties();
-//            prop.setProperty("user", "root");
-//            prop.setProperty("password", "qwe123");
-//            
-//            pageOverviewTable.write().mode(SaveMode.Append).jdbc(url, table, prop);
-//            DataFrame appOverviewTable = sqlContext.sql(appOverviewSql);
-//            appOverviewTable.write().mode(SaveMode.Append).jdbc(url, "app_overview", prop);
-//            pageOverviewTable.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row row) {
-//                    int i = 0;
-//                    String delimiter = "\t";
-//
-//                    try {
-//                        StringBuilder result = new StringBuilder();
-//                        result.append(row.getString(i++)).append(delimiter);
-//                        result.append(row.getString(i++)).append(delimiter);
-//                        result.append(row.getLong(i++)).append(delimiter);
-//                        result.append(row.getLong(i++)).append(delimiter);
-//                        result.append(row.getLong(i++)).append(delimiter);
-//                        result.append(row.getLong(i++)).append(delimiter);
-//                        result.append(row.getLong(i++)).append(delimiter);
-//                        result.append(row.getLong(i++)).append(delimiter);
-//                        return result.toString();
-//                    } catch (Exception ex) {
-//                        return "";
-//                    }
-//                }
-//
-//            }).repartition(1).saveAsTextFile(String.valueOf(System.currentTimeMillis()));
-//            
-//            //calculate referal
-//            DataFrame referalTable = sqlContext.sql(REFERAL_SQL);
-//            
-//            //calculate location
-//            DataFrame locationTable = sqlContext.sql(LOCATION_SQL);
-//            
-//            //calculate device
-//            DataFrame deviceTable = sqlContext.sql(DEVICE_SQL);
-//            
-//            //calculate browser
-//            DataFrame browserTable = sqlContext.sql(BROWSER_SQL);
-//            
-            //calculate app overview
-            //DataFrame appOverviewTable = sqlContext.sql(appOverviewSql);//missing unique_pageview, entrances, exit,total session duration
-            //pageOverviewTable.show();
-            String pageSQL
-                    = "select app_id,path,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews from logsTable group by app_id,path";
-
-            String pageBounceTempSQL 
-                    = "select idvisit from logsTable group by idvisit having COUNT(*)=1";
-            
-            String pageEntranceAndExitTempSQL
-                    = "select idvisit,min(idtscr) as mintime, max(idtscr) as maxtime from logsTable group by idvisit";
-            
-            
-//            String pageBoundSQL
-//                    = "select tk.app_id,tk.path,COUNT(tk.idvisit) as bounces from pagebouncetemp as tbl, logsTable tk where tk.idvisit = tbl.idvisit group by tk.app_id,tk.path";
-//
-//            String pageEntranceSQL
-//                    = "select tk.app_id,tk.path,count(tk.idvisit) as entrances from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.mintime=tk.idtscr group by tk.app_id,tk.path";
-//
-//            String pageExitSQL
-//                    = "select tk.app_id,tk.path,count(tk.idvisit) as exits from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.maxtime=tk.idtscr group by tk.app_id,tk.path";
-            
-
-            
-            
-            
-            String pageTotalTimeSQL
-                    = "select app_id,path_duration,SUM(duration) as total_time_on_page from logsTable group by app_id,path_duration";
-
-            String appSQL
-                    = "SELECT app_id,COUNT(DISTINCT idvisit) as sessions, COUNT(*) as pageviews from " + LOG_TABLE + "  group by app_id";
-
-            String appTotalVisitorSQL
-                    = "Select app_id,count(distinct id) as total_visitor from logsTable group by app_id";
-
-            
-            String appReturnVisitorTempSQL
-                    = "Select app_id,id from logsTable group by app_id,id having min(new_visitor)=0";
-            
-//            String appReturnVisitorSQL
-//                    = "Select app_id,count(id) as return_visitor from appreturnvisitortemp as tlbTmp group by app_id";
 
 
             DataFrame page = sqlContext.sql(PAGE_SQL);
             
             DataFrame pageBouncesTemp = sqlContext.sql(PAGE_BOUNCE_TEMP_SQL);
-            //pageBouncesTemp.registerTempTable("pagebouncetemp");
-            DataFrame pageEntranceAndExitTemp = sqlContext.sql(pageEntranceAndExitTempSQL).persist(StorageLevel.MEMORY_AND_DISK_SER_2());
-            //pageEntranceAndExitTemp.registerTempTable("pageentranceandexittemp");
             
-//            DataFrame pageBounds = sqlContext.sql(pageBoundSQL);
-//            DataFrame pageEntrances = sqlContext.sql(pageEntranceSQL);
-//            DataFrame pageExits = sqlContext.sql(pageExitSQL);
+            DataFrame pageEntranceAndExitTemp = sqlContext.sql(PAGE_ENTRANCE_AND_EXIT_TEMP_SQL)
+                    .persist(StorageLevel.MEMORY_AND_DISK_SER_2());
             
             
             
-            DataFrame pageTotalTime = sqlContext.sql(pageTotalTimeSQL);
+            DataFrame pageTotalTime = sqlContext.sql(PAGE_TOTAL_TIME_SQL);
 
-            DataFrame app = sqlContext.sql(appSQL);
-            DataFrame appUniquePageviews = page.groupBy("app_id").sum("unique_pageviews");
-            DataFrame appTotalVisitor = sqlContext.sql(appTotalVisitorSQL);
+            DataFrame app = sqlContext.sql(APP_SQL);
+            DataFrame appUniquePageviews = page.groupBy(APP_ID).sum(UNIQUE_PAGEVIEWS);
+            DataFrame appTotalVisitor = sqlContext.sql(APP_TOTAL_VISITOR_SQL);
             
-            DataFrame appReturnVisitorTemp = sqlContext.sql(appReturnVisitorTempSQL);
-            //appReturnVisitorTemp.registerTempTable("appreturnvisitortemp");
+            DataFrame appReturnVisitorTemp = sqlContext.sql(APP_RETURN_VISITOR_TEMP_SQL);
             
-//            DataFrame appReturnVisitor = sqlContext.sql(appReturnVisitorSQL);
-//            DataFrame appBounds = pageBounds.groupBy("app_id").sum("bounces");
-//            DataFrame appEntrances = pageEntrances.groupBy("app_id").sum("entrances");
-//            DataFrame appExits = pageExits.groupBy("app_id").sum("exits");
-            DataFrame appTime = pageTotalTime.groupBy("app_id").sum("total_time_on_page");
+            DataFrame appTime = pageTotalTime.groupBy(APP_ID).sum(TOTAL_TIME_ON_PAGE);
 
             DataFrame os = sqlContext.sql(OS_SQL);
 
@@ -323,7 +156,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(3));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "page");
+            }).saveAsTextFile(tempFolder + PAGE);
             
             
             pageBouncesTemp.toJavaRDD().map(new Function<Row, String>() {
@@ -334,7 +167,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getString(0));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "pagebouncetemp");
+            }).saveAsTextFile(tempFolder + PAGE_BOUNCE_TEMP);
             
             pageEntranceAndExitTemp.toJavaRDD().map(new Function<Row, String>() {
 
@@ -346,31 +179,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(2));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "pageentranceandexittemp");
-
-//            pageBounds.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return pageFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "pagebounces");
-//
-//            pageEntrances.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return pageFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "pageentrances");
-//
-//            pageExits.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return pageFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "pageexits");
+            }).saveAsTextFile(tempFolder + PAGE_ENTRANCE_AND_EXIT_TEMP);
 
             pageEntranceAndExitTemp.unpersist();
             
@@ -380,7 +189,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return pageFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "pagetotaltimes");
+            }).saveAsTextFile(tempFolder + PAGE_TOTAL_TIME);
 
             /*
              * save app figure to temp file
@@ -395,7 +204,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(2));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "app");
+            }).saveAsTextFile(tempFolder + APP);
             
             
             
@@ -408,15 +217,8 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getString(1));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "appreturnvisitortemp");
+            }).saveAsTextFile(tempFolder + APP_RETURN_VISITOR_TEMP);
 
-//            appReturnVisitor.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return appTotalFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "appreturnvisitor");
 
             appTotalVisitor.toJavaRDD().map(new Function<Row, String>() {
 
@@ -424,7 +226,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "apptotalvisitor");
+            }).saveAsTextFile(tempFolder + APP_TOTAL_VISITOR);
 
             appUniquePageviews.toJavaRDD().map(new Function<Row, String>() {
 
@@ -432,33 +234,8 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "appuniquepageview");
+            }).saveAsTextFile(tempFolder + APP_UNIQUE_PAGEVIEW);
 
-//            appBounds.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return appTotalFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "appbounce");
-//
-//        
-//            
-//            appEntrances.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return appTotalFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "appentrances");
-//
-//            appExits.toJavaRDD().map(new Function<Row, String>() {
-//
-//                @Override
-//                public String call(Row t1) {
-//                    return appTotalFormat(t1);
-//                }
-//            }).saveAsTextFile(tempFolder + "appexits");
 
             appTime.toJavaRDD().map(new Function<Row, String>() {
 
@@ -466,7 +243,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "apptime");
+            }).saveAsTextFile(tempFolder + APP_TOTAL_TIME);
 
             /*
              * save other to temp
@@ -477,7 +254,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) throws Exception {
                     return otherFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "os");
+            }).saveAsTextFile(tempFolder + OS);
 
             device.toJavaRDD().map(new Function<Row, String>() {
 
@@ -485,7 +262,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) throws Exception {
                     return otherFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "device");
+            }).saveAsTextFile(tempFolder + DEVICE);
 
             browser.toJavaRDD().map(new Function<Row, String>() {
 
@@ -493,7 +270,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) throws Exception {
                     return otherFormat(t1);
                 }
-            }).repartition(1).saveAsTextFile(tempFolder + "browser");
+            }).saveAsTextFile(tempFolder + BROWSER);
 
             location.toJavaRDD().map(new Function<Row, String>() {
 
@@ -501,7 +278,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) throws Exception {
                     return otherFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "location");
+            }).saveAsTextFile(tempFolder + LOCATION);
 
             language.toJavaRDD().map(new Function<Row, String>() {
 
@@ -509,7 +286,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) throws Exception {
                     return otherFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "language");
+            }).saveAsTextFile(tempFolder + LANGUAGE);
 
             referal.toJavaRDD().map(new Function<Row, String>() {
 
@@ -522,15 +299,15 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(3));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "referal");
+            }).saveAsTextFile(tempFolder + REFERAL);
             
             
             
             
-            analyzePhase2(sparkContext, sqlContext, tempFolder);
+            readTempFileAndContinueCalculateData(sparkContext, sqlContext, tempFolder);
 
             
-            dataFrame.unpersist();
+            logDataFrame.unpersist();
             
 
             long time = System.currentTimeMillis() - sparkContext.startTime();
@@ -548,9 +325,9 @@ public class ZLogAnalyzer implements Serializable {
     }
     
     
-    public void analyzePhase2(JavaSparkContext sparkContext, SQLContext sqlContext, String tempFolder){
+    public void readTempFileAndContinueCalculateData(JavaSparkContext sparkContext, SQLContext sqlContext, String tempFolder){
         try {
-            JavaRDD<ZPageBounceTempObj> pageBounceTempRdd = sparkContext.textFile(tempFolder+"pagebouncetemp")
+            JavaRDD<ZPageBounceTempObj> pageBounceTempRdd = sparkContext.textFile(tempFolder+PAGE_BOUNCE_TEMP)
                     .map(new Function<String, ZPageBounceTempObj>() {
 
                         @Override
@@ -558,7 +335,7 @@ public class ZLogAnalyzer implements Serializable {
                             return ZPageBounceTempObj.parseFromLogLine(t1);
                         }
                     });
-            JavaRDD<ZPageEntranceAndExitTempObj> pageEntranceAndExitTempRdd = sparkContext.textFile(tempFolder+"pageentranceandexittemp")
+            JavaRDD<ZPageEntranceAndExitTempObj> pageEntranceAndExitTempRdd = sparkContext.textFile(tempFolder+PAGE_ENTRANCE_AND_EXIT_TEMP)
                     .map(new Function<String, ZPageEntranceAndExitTempObj>() {
 
                         @Override
@@ -567,7 +344,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
             
-            JavaRDD<ZAppReturnVisitorTempObj> appReturnVisitorTempRdd = sparkContext.textFile(tempFolder+"appreturnvisitortemp")
+            JavaRDD<ZAppReturnVisitorTempObj> appReturnVisitorTempRdd = sparkContext.textFile(tempFolder+APP_RETURN_VISITOR_TEMP)
                     .map(new Function<String, ZAppReturnVisitorTempObj>() {
 
                         @Override
@@ -575,31 +352,19 @@ public class ZLogAnalyzer implements Serializable {
                             return ZAppReturnVisitorTempObj.parseFromLogLine(t1);
                         }
                     });
-            sqlContext.createDataFrame(pageBounceTempRdd, ZPageBounceTempObj.class).registerTempTable("pagebouncetemp");
-            sqlContext.createDataFrame(pageEntranceAndExitTempRdd, ZPageEntranceAndExitTempObj.class).registerTempTable("pageentranceandexittemp");
-            sqlContext.createDataFrame(appReturnVisitorTempRdd, ZAppReturnVisitorTempObj.class).registerTempTable("appreturnvisitortemp");
+            sqlContext.createDataFrame(pageBounceTempRdd, ZPageBounceTempObj.class).registerTempTable(PAGE_BOUNCE_TEMP);
+            sqlContext.createDataFrame(pageEntranceAndExitTempRdd, ZPageEntranceAndExitTempObj.class).registerTempTable(PAGE_ENTRANCE_AND_EXIT_TEMP);
+            sqlContext.createDataFrame(appReturnVisitorTempRdd, ZAppReturnVisitorTempObj.class).registerTempTable(APP_RETURN_VISITOR_TEMP);
             
+           
+            DataFrame pageBounds = sqlContext.sql(PAGE_BOUNCE_SQL);
+            DataFrame pageEntrances = sqlContext.sql(PAGE_ENTRANCE_SQL);
+            DataFrame pageExits = sqlContext.sql(PAGE_EXIT_SQL);
             
-            String pageBoundSQL
-                    = "select tk.app_id,tk.path,COUNT(tk.idvisit) as bounces from pagebouncetemp as tbl, logsTable tk where tk.idvisit = tbl.idvisit group by tk.app_id,tk.path";
-
-            String pageEntranceSQL
-                    = "select tk.app_id,tk.path,count(tk.idvisit) as entrances from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.mintime=tk.idtscr group by tk.app_id,tk.path";
-
-            String pageExitSQL
-                    = "select tk.app_id,tk.path,count(tk.idvisit) as exits from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.maxtime=tk.idtscr group by tk.app_id,tk.path";
-            
-            String appReturnVisitorSQL
-                    = "Select app_id,count(id) as return_visitor from appreturnvisitortemp as tlbTmp group by app_id";
-            
-            DataFrame pageBounds = sqlContext.sql(pageBoundSQL);
-            DataFrame pageEntrances = sqlContext.sql(pageEntranceSQL);
-            DataFrame pageExits = sqlContext.sql(pageExitSQL);
-            
-            DataFrame appReturnVisitor = sqlContext.sql(appReturnVisitorSQL);
-            DataFrame appBounds = pageBounds.groupBy("app_id").sum("bounces");
-            DataFrame appEntrances = pageEntrances.groupBy("app_id").sum("entrances");
-            DataFrame appExits = pageExits.groupBy("app_id").sum("exits");
+            DataFrame appReturnVisitor = sqlContext.sql(APP_RETURN_VISITOR_SQL);
+            DataFrame appBounds = pageBounds.groupBy(APP_ID).sum(BOUNCES);
+            DataFrame appEntrances = pageEntrances.groupBy(APP_ID).sum(ENTRANCES);
+            DataFrame appExits = pageExits.groupBy(APP_ID).sum(EXITS);
             
             
             //save page
@@ -609,7 +374,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return pageFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "pagebounces");
+            }).saveAsTextFile(tempFolder + PAGE_BOUNCE);
 
             pageEntrances.toJavaRDD().map(new Function<Row, String>() {
 
@@ -617,7 +382,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return pageFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "pageentrances");
+            }).saveAsTextFile(tempFolder + PAGE_ENTRANCE);
 
             pageExits.toJavaRDD().map(new Function<Row, String>() {
 
@@ -625,7 +390,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return pageFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "pageexits");
+            }).saveAsTextFile(tempFolder + PAGE_EXIT);
             
             //save app
             appReturnVisitor.toJavaRDD().map(new Function<Row, String>() {
@@ -634,7 +399,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "appreturnvisitor");
+            }).saveAsTextFile(tempFolder + APP_RETURN_VISITOR);
             
             
             appBounds.toJavaRDD().map(new Function<Row, String>() {
@@ -643,7 +408,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "appbounce");
+            }).saveAsTextFile(tempFolder + APP_BOUNCE);
 
         
             
@@ -653,7 +418,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "appentrances");
+            }).saveAsTextFile(tempFolder + APP_ENTRANCE);
 
             appExits.toJavaRDD().map(new Function<Row, String>() {
 
@@ -661,7 +426,7 @@ public class ZLogAnalyzer implements Serializable {
                 public String call(Row t1) {
                     return appTotalFormat(t1);
                 }
-            }).saveAsTextFile(tempFolder + "appexits");            
+            }).saveAsTextFile(tempFolder + APP_EXIT);            
             
             
         } catch (Exception e) {
@@ -685,7 +450,7 @@ public class ZLogAnalyzer implements Serializable {
             /*
              *parse tmp file to page table
              */
-            JavaRDD<ZPageObj> pageRdd = sparkContext.textFile(tmpFolder + "page")
+            JavaRDD<ZPageObj> pageRdd = sparkContext.textFile(tmpFolder + PAGE)
                     .map(new Function<String, ZPageObj>() {
 
                         @Override
@@ -694,7 +459,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZPageBounceObj> pageBounceRdd = sparkContext.textFile(tmpFolder + "pagebounces")
+            JavaRDD<ZPageBounceObj> pageBounceRdd = sparkContext.textFile(tmpFolder + PAGE_BOUNCE)
                     .map(new Function<String, ZPageBounceObj>() {
 
                         @Override
@@ -703,7 +468,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZPageEntranceObj> pageEntranceRdd = sparkContext.textFile(tmpFolder + "pageentrances")
+            JavaRDD<ZPageEntranceObj> pageEntranceRdd = sparkContext.textFile(tmpFolder + PAGE_ENTRANCE)
                     .map(new Function<String, ZPageEntranceObj>() {
 
                         @Override
@@ -712,7 +477,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZPageExitObj> pageExitRdd = sparkContext.textFile(tmpFolder + "pageexits")
+            JavaRDD<ZPageExitObj> pageExitRdd = sparkContext.textFile(tmpFolder + PAGE_EXIT)
                     .map(new Function<String, ZPageExitObj>() {
 
                         @Override
@@ -721,7 +486,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZPageTimeObj> pageTimeRdd = sparkContext.textFile(tmpFolder + "pagetotaltimes")
+            JavaRDD<ZPageTimeObj> pageTimeRdd = sparkContext.textFile(tmpFolder + PAGE_TOTAL_TIME)
                     .map(new Function<String, ZPageTimeObj>() {
 
                         @Override
@@ -734,7 +499,7 @@ public class ZLogAnalyzer implements Serializable {
             /*
              * parse tmp file to app table
              */
-            JavaRDD<ZAppObj> appRdd = sparkContext.textFile(tmpFolder + "app")
+            JavaRDD<ZAppObj> appRdd = sparkContext.textFile(tmpFolder + APP)
                     .map(new Function<String, ZAppObj>() {
                         @Override
                         public ZAppObj call(String line) {
@@ -742,7 +507,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppUniquePageviewObj> appUniquePageviewRdd = sparkContext.textFile(tmpFolder + "appuniquepageview")
+            JavaRDD<ZAppUniquePageviewObj> appUniquePageviewRdd = sparkContext.textFile(tmpFolder + APP_UNIQUE_PAGEVIEW)
                     .map(new Function<String, ZAppUniquePageviewObj>() {
                         @Override
                         public ZAppUniquePageviewObj call(String line) {
@@ -750,7 +515,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppTotalVisitorObj> appTotalVisitorRdd = sparkContext.textFile(tmpFolder + "apptotalvisitor")
+            JavaRDD<ZAppTotalVisitorObj> appTotalVisitorRdd = sparkContext.textFile(tmpFolder + APP_TOTAL_VISITOR)
                     .map(new Function<String, ZAppTotalVisitorObj>() {
                         @Override
                         public ZAppTotalVisitorObj call(String line) {
@@ -758,7 +523,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppReturnVisitorObj> appReturnVisitorRdd = sparkContext.textFile(tmpFolder + "appreturnvisitor")
+            JavaRDD<ZAppReturnVisitorObj> appReturnVisitorRdd = sparkContext.textFile(tmpFolder + APP_RETURN_VISITOR)
                     .map(new Function<String, ZAppReturnVisitorObj>() {
                         @Override
                         public ZAppReturnVisitorObj call(String line) {
@@ -766,7 +531,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppBounceObj> appBounceRdd = sparkContext.textFile(tmpFolder + "appbounce")
+            JavaRDD<ZAppBounceObj> appBounceRdd = sparkContext.textFile(tmpFolder + APP_BOUNCE)
                     .map(new Function<String, ZAppBounceObj>() {
                         @Override
                         public ZAppBounceObj call(String line) {
@@ -774,7 +539,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppEntranceObj> appEntranceRdd = sparkContext.textFile(tmpFolder + "appentrances")
+            JavaRDD<ZAppEntranceObj> appEntranceRdd = sparkContext.textFile(tmpFolder + APP_ENTRANCE)
                     .map(new Function<String, ZAppEntranceObj>() {
                         @Override
                         public ZAppEntranceObj call(String line) {
@@ -782,7 +547,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppExitObj> appExitRdd = sparkContext.textFile(tmpFolder + "appexits")
+            JavaRDD<ZAppExitObj> appExitRdd = sparkContext.textFile(tmpFolder + APP_EXIT)
                     .map(new Function<String, ZAppExitObj>() {
                         @Override
                         public ZAppExitObj call(String line) {
@@ -790,7 +555,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZAppTimeObj> appTimeRdd = sparkContext.textFile(tmpFolder + "apptime")
+            JavaRDD<ZAppTimeObj> appTimeRdd = sparkContext.textFile(tmpFolder + APP_TOTAL_TIME)
                     .map(new Function<String, ZAppTimeObj>() {
                         @Override
                         public ZAppTimeObj call(String line) {
@@ -801,7 +566,7 @@ public class ZLogAnalyzer implements Serializable {
             /*
              *parse tmp file to others table
              */
-            JavaRDD<ZOSObj> osRdd = sparkContext.textFile(tmpFolder + "os")
+            JavaRDD<ZOSObj> osRdd = sparkContext.textFile(tmpFolder + OS)
                     .map(new Function<String, ZOSObj>() {
                         @Override
                         public ZOSObj call(String line) {
@@ -809,7 +574,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZDeviceObj> deviceRdd = sparkContext.textFile(tmpFolder + "device")
+            JavaRDD<ZDeviceObj> deviceRdd = sparkContext.textFile(tmpFolder + DEVICE)
                     .map(new Function<String, ZDeviceObj>() {
                         @Override
                         public ZDeviceObj call(String line) {
@@ -817,7 +582,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZBrowserObj> browserRdd = sparkContext.textFile(tmpFolder + "browser")
+            JavaRDD<ZBrowserObj> browserRdd = sparkContext.textFile(tmpFolder + BROWSER)
                     .map(new Function<String, ZBrowserObj>() {
                         @Override
                         public ZBrowserObj call(String line) {
@@ -825,7 +590,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZLocationObj> locationRdd = sparkContext.textFile(tmpFolder + "location")
+            JavaRDD<ZLocationObj> locationRdd = sparkContext.textFile(tmpFolder + LOCATION)
                     .map(new Function<String, ZLocationObj>() {
                         @Override
                         public ZLocationObj call(String line) {
@@ -833,7 +598,7 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZLanguageObj> languageRdd = sparkContext.textFile(tmpFolder + "language")
+            JavaRDD<ZLanguageObj> languageRdd = sparkContext.textFile(tmpFolder + LANGUAGE)
                     .map(new Function<String, ZLanguageObj>() {
                         @Override
                         public ZLanguageObj call(String line) {
@@ -841,16 +606,13 @@ public class ZLogAnalyzer implements Serializable {
                         }
                     });
 
-            JavaRDD<ZReferalObj> referalRdd = sparkContext.textFile(tmpFolder + "referal")
+            JavaRDD<ZReferalObj> referalRdd = sparkContext.textFile(tmpFolder + REFERAL)
                     .map(new Function<String, ZReferalObj>() {
                         @Override
                         public ZReferalObj call(String line) {
                             return ZReferalObj.parseFromLogLine(line);
                         }
                     });
-            
-            JavaRDD<ZObject> referalRdd1 = sparkContext.textFile(tmpFolder + "referal")
-                    .map(new parseLogFunc(TestObj.class));
 
             /*
              *join table and write to db
@@ -870,33 +632,33 @@ public class ZLogAnalyzer implements Serializable {
             DataFrame appExitDF = sqlContext.createDataFrame(appExitRdd, ZAppExitObj.class);
             DataFrame appTimeDF = sqlContext.createDataFrame(appTimeRdd, ZAppTimeObj.class);
 
-            DataFrame osTable = sqlContext.createDataFrame(osRdd, ZOSObj.class).select("id", "app_id", "date_tracking", "os_type", "sessions");
+            DataFrame osTable = sqlContext.createDataFrame(osRdd, ZOSObj.class).select("id", APP_ID, DATE, OS_TYPE, SESSIONS);
 
-            DataFrame browserDF = sqlContext.createDataFrame(browserRdd, ZBrowserObj.class).select("id", "app_id", "date_tracking", "browser_type", "sessions");
+            DataFrame browserDF = sqlContext.createDataFrame(browserRdd, ZBrowserObj.class).select("id", APP_ID, DATE, BROWSER_TYPE, SESSIONS);
 
-            DataFrame deviceTable = sqlContext.createDataFrame(deviceRdd, ZDeviceObj.class).select("id", "app_id", "date_tracking", "device_type", "sessions");
+            DataFrame deviceTable = sqlContext.createDataFrame(deviceRdd, ZDeviceObj.class).select("id", APP_ID, DATE, DEVICE_TYPE, SESSIONS);
 
-            DataFrame locationTable = sqlContext.createDataFrame(locationRdd, ZLocationObj.class).select("id", "app_id", "date_tracking", "location", "sessions");
+            DataFrame locationTable = sqlContext.createDataFrame(locationRdd, ZLocationObj.class).select("id", APP_ID, DATE, LOCATION, SESSIONS);
 
-            DataFrame languageTable = sqlContext.createDataFrame(languageRdd, ZLanguageObj.class).select("id", "app_id", "date_tracking", "language", "sessions");
+            DataFrame languageTable = sqlContext.createDataFrame(languageRdd, ZLanguageObj.class).select("id", APP_ID, DATE, LANGUAGE, SESSIONS);
 
-            DataFrame referalTable = sqlContext.createDataFrame(referalRdd, ZReferalObj.class).select("id", "app_id", "date_tracking", "url_ref", "ref_type", "sessions");
+            DataFrame referalTable = sqlContext.createDataFrame(referalRdd, ZReferalObj.class).select("id", APP_ID, DATE, URL_REF, REF_TYPE, SESSIONS);
 
-            DataFrame pageTable = pageDF.join(pageBounceDF, pageBounceDF.col("app_id").equalTo(pageDF.col("app_id")).and(pageBounceDF.col("path").equalTo(pageDF.col("path"))), "left_outer")
-                    .join(pageEntranceDF, pageEntranceDF.col("app_id").equalTo(pageDF.col("app_id")).and(pageEntranceDF.col("path").equalTo(pageDF.col("path"))), "left_outer")
-                    .join(pageExitDF, pageExitDF.col("app_id").equalTo(pageDF.col("app_id")).and(pageExitDF.col("path").equalTo(pageDF.col("path"))), "left_outer")
-                    .join(pageTimeDF, pageTimeDF.col("app_id").equalTo(pageDF.col("app_id")).and(pageTimeDF.col("path").equalTo(pageDF.col("path"))), "left_outer")
-                    .select(pageDF.col("id"), pageDF.col("app_id"), pageDF.col("path"), pageDF.col("date_tracking"), pageDF.col("pageviews"), pageDF.col("unique_pageviews"), pageBounceDF.col("bounces"), pageEntranceDF.col("entrances"), pageExitDF.col("exits"), pageTimeDF.col("total_time_on_page"))
+            DataFrame pageTable = pageDF.join(pageBounceDF, pageBounceDF.col(APP_ID).equalTo(pageDF.col(APP_ID)).and(pageBounceDF.col(PATH).equalTo(pageDF.col(PATH))), "left_outer")
+                    .join(pageEntranceDF, pageEntranceDF.col(APP_ID).equalTo(pageDF.col(APP_ID)).and(pageEntranceDF.col(PATH).equalTo(pageDF.col(PATH))), "left_outer")
+                    .join(pageExitDF, pageExitDF.col(APP_ID).equalTo(pageDF.col(APP_ID)).and(pageExitDF.col(PATH).equalTo(pageDF.col(PATH))), "left_outer")
+                    .join(pageTimeDF, pageTimeDF.col(APP_ID).equalTo(pageDF.col(APP_ID)).and(pageTimeDF.col(PATH).equalTo(pageDF.col(PATH))), "left_outer")
+                    .select(pageDF.col("id"), pageDF.col(APP_ID), pageDF.col(PATH), pageDF.col(DATE), pageDF.col(PAGEVIEWS), pageDF.col(UNIQUE_PAGEVIEWS), pageBounceDF.col(BOUNCES), pageEntranceDF.col(ENTRANCES), pageExitDF.col(EXITS), pageTimeDF.col(TOTAL_TIME_ON_PAGE))
                     .na().fill(0);
 
-            DataFrame appTable = appDF.join(appUniquePageviewDF, appUniquePageviewDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .join(appTotalVisitorDF, appTotalVisitorDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .join(appReturnVisitorDF, appReturnVisitorDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .join(appBounceDF, appBounceDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .join(appEntranceDF, appEntranceDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .join(appExitDF, appExitDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .join(appTimeDF, appTimeDF.col("app_id").equalTo(appDF.col("app_id")), "left_outer")
-                    .select(appDF.col("id"), appDF.col("app_id"), appDF.col("date_tracking"), appDF.col("sessions"), appDF.col("pageviews"), appUniquePageviewDF.col("unique_pageviews"), appTotalVisitorDF.col("total_visitor").minus(appReturnVisitorDF.col("return_visitor")).as("new_visitor"), appReturnVisitorDF.col("return_visitor"), appBounceDF.col("bounces"), appEntranceDF.col("entrances"), appExitDF.col("exits"), appTimeDF.col("total_session_duration"))
+            DataFrame appTable = appDF.join(appUniquePageviewDF, appUniquePageviewDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .join(appTotalVisitorDF, appTotalVisitorDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .join(appReturnVisitorDF, appReturnVisitorDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .join(appBounceDF, appBounceDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .join(appEntranceDF, appEntranceDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .join(appExitDF, appExitDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .join(appTimeDF, appTimeDF.col(APP_ID).equalTo(appDF.col(APP_ID)), "left_outer")
+                    .select(appDF.col("id"), appDF.col(APP_ID), appDF.col(DATE), appDF.col(SESSIONS), appDF.col(PAGEVIEWS), appUniquePageviewDF.col(UNIQUE_PAGEVIEWS), appTotalVisitorDF.col(TOTAL_VISITOR).minus(appReturnVisitorDF.col(RETURN_VISITOR)).as(NEW_VISITOR), appReturnVisitorDF.col(RETURN_VISITOR), appBounceDF.col(BOUNCES), appEntranceDF.col(ENTRANCES), appExitDF.col(EXITS), appTimeDF.col(TOTAL_SESSION_DURATION))
                     .na().fill(0);
 
             String url = "jdbc:mysql://localhost/zanalytics";
@@ -904,14 +666,14 @@ public class ZLogAnalyzer implements Serializable {
             prop.setProperty("user", "root");
             prop.setProperty("password", "qwe123");
 
-            appTable.write().mode(SaveMode.Append).jdbc(url, "app_overview", prop);
-            pageTable.write().mode(SaveMode.Append).jdbc(url, "page_overview", prop);
-            osTable.write().mode(SaveMode.Append).jdbc(url, "os", prop);
-            browserDF.write().mode(SaveMode.Append).jdbc(url, "browser", prop);
-            deviceTable.write().mode(SaveMode.Append).jdbc(url, "device", prop);
-            locationTable.write().mode(SaveMode.Append).jdbc(url, "location", prop);
-            languageTable.write().mode(SaveMode.Append).jdbc(url, "language", prop);
-            referalTable.write().mode(SaveMode.Append).jdbc(url, "referal", prop);
+            appTable.write().mode(SaveMode.Append).jdbc(url, APP_OVERVIEW_TABLE, prop);
+            pageTable.write().mode(SaveMode.Append).jdbc(url, PAGE_OVERVIEW_TABLE, prop);
+            osTable.write().mode(SaveMode.Append).jdbc(url, OS, prop);
+            browserDF.write().mode(SaveMode.Append).jdbc(url, BROWSER, prop);
+            deviceTable.write().mode(SaveMode.Append).jdbc(url, DEVICE, prop);
+            locationTable.write().mode(SaveMode.Append).jdbc(url, LOCATION, prop);
+            languageTable.write().mode(SaveMode.Append).jdbc(url, LANGUAGE, prop);
+            referalTable.write().mode(SaveMode.Append).jdbc(url, REFERAL, prop);
             long time = System.currentTimeMillis() - sparkContext.startTime();
             
             sparkContext.stop();
@@ -956,7 +718,7 @@ public class ZLogAnalyzer implements Serializable {
 
     public static void main(String... args) {
         try {
-            String logPath = "/home/datbt/workspace/ZALogStatistic/ZAlog1";
+            String logPath = "/home/datbt/workspace/ZALogStatistic/ZAlog";
 //            if (args.length < 2)
 //                return;
 //            
@@ -965,14 +727,14 @@ public class ZLogAnalyzer implements Serializable {
 //            int mode = Integer.parseInt(args[1]);
 //            //System.err.println(tempFolder + "\t" + mode);
 //            if (mode == 1)
-//                ZLogAnalyzer.getInstance().analyze(logPath, tempFolder);
+//                ZLogAnalyzer.getInstance().parseLogAndWriteDataToTemp(logPath, tempFolder);
 //            else 
 //                ZLogAnalyzer.getInstance().joinTempFileAndWriteToDB(tempFolder);
             
             
             
             String tempFolder = String.valueOf(System.currentTimeMillis()) + "/";
-            ZLogAnalyzer.getInstance().analyze(logPath, tempFolder);
+            ZLogAnalyzer.getInstance().parseLogAndWriteDataToTemp(logPath, tempFolder);
             System.gc();
             ZLogAnalyzer.getInstance().joinTempFileAndWriteToDB(tempFolder);
                 
@@ -989,7 +751,7 @@ public class ZLogAnalyzer implements Serializable {
 //        String tempFolder = String.valueOf(System.currentTimeMillis()) + "/";
 //        
 //        ZLogAnalyzer statistic = ZLogAnalyzer.getInstance();
-//        statistic.analyze(logPath, tempFolder);
+//        statistic.parseLogAndWriteDataToTemp(logPath, tempFolder);
 ////        while (true) {            
 ////            if (statistic.analyzeDone())
 ////                break;
@@ -1001,23 +763,23 @@ public class ZLogAnalyzer implements Serializable {
 //        System.err.println("time = " + (System.currentTimeMillis() - now));
     }
     
-    class parseLogFunc implements Function<String, ZObject>{
-        private Class<ZObject> zObjClass;
-        
-        public parseLogFunc(Class zObjClass){
-            this.zObjClass = zObjClass;
-        }
-        
-        @Override
-        public ZObject call(String t1){
-            try {
-                zObjClass.newInstance().parseFromLogLine(t1);
-            } catch (InstantiationException | IllegalAccessException ex) {
-                ex.printStackTrace();
-            }
-            return null;
-        }
-        
-    }
+//    class parseLogFunc implements Function<String, ZObject>{
+//        private Class<ZObject> zObjClass;
+//        
+//        public parseLogFunc(Class zObjClass){
+//            this.zObjClass = zObjClass;
+//        }
+//        
+//        @Override
+//        public ZObject call(String t1){
+//            try {
+//                zObjClass.newInstance().parseFromLogLine(t1);
+//            } catch (InstantiationException | IllegalAccessException ex) {
+//                ex.printStackTrace();
+//            }
+//            return null;
+//        }
+//        
+//    }
 
 }
