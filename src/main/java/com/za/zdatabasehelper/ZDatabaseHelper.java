@@ -181,6 +181,21 @@ public class ZDatabaseHelper {
         }
         return true;
     }
+    
+    public void insertToPageByFile(String path){
+        String sql = "load data local infile '" + path +"' \n" +
+                    " replace \n" +
+                    " into table page_overview \n" +
+                    " columns terminated by '\\t' \n" +
+                    " (app_id,path,pageviews,unique_pageviews,bounces,entrances,exits,total_time_on_page)";
+        try {
+            preparedStatement = connection.prepareStatement(sql);
+            
+            preparedStatement.executeUpdate();
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+    }
 
 //    public static void main(String[] args) {
 //        try {

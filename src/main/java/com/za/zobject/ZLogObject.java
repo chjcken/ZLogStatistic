@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.za.zloganalyzer;
+package com.za.zobject;
 
 import java.io.Serializable;
 import java.util.regex.Matcher;
@@ -17,11 +17,11 @@ public class ZLogObject implements Serializable{
     private static final String TAG = "[ZLogObject]\t";
     
     private String id;
-    private String idsite;
+    private String app_id;
     private String action_name;
-    private String url;
+    private String path;
     private int ref_type;
-    private String urlref;
+    private String url_ref;
     private int idvc;
     private long viewts;
     private long idts;
@@ -32,11 +32,11 @@ public class ZLogObject implements Serializable{
     private int fla;
     private int new_visitor;
     private String ct_code;
-    private String ct_city;
+    private String location;
     private String us_lang;
-    private String us_br;
-    private String os;
-    private String device;
+    private String browser_type;
+    private String os_type;
+    private String device_type;
     private int duration;
     private String path_duration;
 
@@ -47,11 +47,11 @@ public class ZLogObject implements Serializable{
             String ct_city, String us_lang, String us_br, String os, 
             String device, String duration, String path_duration) {
         this.id = id;
-        this.idsite = idsite;
+        this.app_id = idsite;
         this.action_name = action_name;
-        this.url = url;
+        this.path = url;
         this.ref_type = Integer.parseInt(ref_type);
-        this.urlref = urlref;
+        this.url_ref = urlref;
         this.idvc = Integer.parseInt(idvc);
         this.viewts = Long.parseLong(viewts);
         this.idts = Long.parseLong(idts);
@@ -62,11 +62,11 @@ public class ZLogObject implements Serializable{
         this.fla = Integer.parseInt(fla);
         this.new_visitor = Integer.parseInt(new_visitor);
         this.ct_code = ct_code;
-        this.ct_city = ct_city;
+        this.location = ct_city;
         this.us_lang = us_lang;
-        this.us_br = us_br;
-        this.os = os;
-        this.device = device;
+        this.browser_type = us_br;
+        this.os_type = os;
+        this.device_type = device;
         this.duration = Integer.parseInt(duration);
         this.path_duration = path_duration;
     }
@@ -79,12 +79,12 @@ public class ZLogObject implements Serializable{
         this.id = id;
     }
 
-    public String getIdsite() {
-        return idsite;
+    public String getApp_id() {
+        return app_id;
     }
 
-    public void setIdsite(String idsite) {
-        this.idsite = idsite;
+    public void setApp_id(String app_id) {
+        this.app_id = app_id;
     }
 
     public String getAction_name() {
@@ -95,12 +95,12 @@ public class ZLogObject implements Serializable{
         this.action_name = action_name;
     }
 
-    public String getUrl() {
-        return url;
+    public String getPath() {
+        return path;
     }
 
-    public void setUrl(String url) {
-        this.url = url;
+    public void setPath(String path) {
+        this.path = path;
     }
 
     public int getRef_type() {
@@ -111,12 +111,12 @@ public class ZLogObject implements Serializable{
         this.ref_type = ref_type;
     }
 
-    public String getUrlref() {
-        return urlref;
+    public String getUrl_ref() {
+        return url_ref;
     }
 
-    public void setUrlref(String urlref) {
-        this.urlref = urlref;
+    public void setUrl_ref(String url_ref) {
+        this.url_ref = url_ref;
     }
 
     public int getIdvc() {
@@ -199,12 +199,12 @@ public class ZLogObject implements Serializable{
         this.ct_code = ct_code;
     }
 
-    public String getCt_city() {
-        return ct_city;
+    public String getLocation() {
+        return location;
     }
 
-    public void setCt_city(String ct_city) {
-        this.ct_city = ct_city;
+    public void setLocation(String location) {
+        this.location = location;
     }
 
     public String getUs_lang() {
@@ -215,28 +215,28 @@ public class ZLogObject implements Serializable{
         this.us_lang = us_lang;
     }
 
-    public String getUs_br() {
-        return us_br;
+    public String getBrowser_type() {
+        return browser_type;
     }
 
-    public void setUs_br(String us_br) {
-        this.us_br = us_br;
+    public void setBrowser_type(String browser_type) {
+        this.browser_type = browser_type;
     }
 
-    public String getOs() {
-        return os;
+    public String getOs_type() {
+        return os_type;
     }
 
-    public void setOs(String os) {
-        this.os = os;
+    public void setOs_type(String os_type) {
+        this.os_type = os_type;
     }
 
-    public String getDevice() {
-        return device;
+    public String getDevice_type() {
+        return device_type;
     }
 
-    public void setDevice(String device) {
-        this.device = device;
+    public void setDevice_type(String device_type) {
+        this.device_type = device_type;
     }
 
     public int getDuration() {
@@ -254,6 +254,8 @@ public class ZLogObject implements Serializable{
     public void setPath_duration(String path_duration) {
         this.path_duration = path_duration;
     }
+
+
 
     private static final String LOG_ENTRY_PATTERN
             = "(\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+)";
@@ -274,10 +276,9 @@ public class ZLogObject implements Serializable{
 
     @Override
     public String toString() {
-        return String.format(
-                "%s %s %s %s %d %s %d %d %d %d %s %s %d %d %d %s %s %s %s %s %s %d %s",
-                id, idsite, action_name, url, ref_type, urlref, idvc, viewts, 
+        return String.format("%s %s %s %s %d %s %d %d %d %d %s %s %d %d %d %s %s %s %s %s %s %d %s",
+                id, app_id, action_name, path, ref_type, url_ref, idvc, viewts, 
                 idts, idtscr, idvisit, res, java, fla, new_visitor, ct_code, 
-                ct_city, us_lang, us_br, os, device, duration, path_duration);
+                location, us_lang, browser_type, os_type, device_type, duration, path_duration);
     }
 }
