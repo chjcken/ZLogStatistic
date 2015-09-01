@@ -5,6 +5,7 @@
  */
 package com.za.zloganalyzer;
 
+import com.za.zobject.TestObj;
 import com.za.zobject.ZPageObj;
 import com.za.zobject.ZAppTotalVisitorObj;
 import com.za.zobject.ZAppUniquePageviewObj;
@@ -22,9 +23,14 @@ import com.za.zobject.ZAppObj;
 import com.za.zobject.ZLocationObj;
 import com.za.zobject.ZAppReturnVisitorObj;
 import com.za.zobject.ZAppEntranceObj;
+import com.za.zobject.ZAppReturnVisitorTempObj;
 import com.za.zobject.ZPageBounceObj;
 import com.za.zobject.ZBrowserObj;
+import com.za.zobject.ZObject;
+import com.za.zobject.ZPageBounceTempObj;
+import com.za.zobject.ZPageEntranceAndExitTempObj;
 import com.za.zobject.ZReferalObj;
+import static com.za.zutil.ZSparkSQL.*;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -91,7 +97,8 @@ public class ZLogAnalyzer implements Serializable {
     public void analyze(String logSource, String tempFolder) {
         if (logSource == null) {
             throw new NullPointerException("logSource is null.");
-        }
+        }      
+        
         try {
 
             SparkConf sparkConf;
@@ -223,15 +230,26 @@ public class ZLogAnalyzer implements Serializable {
             String pageSQL
                     = "select app_id,path,COUNT(*) as pageviews,COUNT(DISTINCT idvisit) as unique_pageviews from logsTable group by app_id,path";
 
-            String pageBoundSQL
-                    = "select tk.app_id,tk.path,COUNT(tk.idvisit) as bounces from (select idvisit from logsTable group by idvisit having COUNT(*)=1) as tbl, logsTable tk where tk.idvisit = tbl.idvisit group by tk.app_id,tk.path";
+            String pageBounceTempSQL 
+                    = "select idvisit from logsTable group by idvisit having COUNT(*)=1";
+            
+            String pageEntranceAndExitTempSQL
+                    = "select idvisit,min(idtscr) as mintime, max(idtscr) as maxtime from logsTable group by idvisit";
+            
+            
+//            String pageBoundSQL
+//                    = "select tk.app_id,tk.path,COUNT(tk.idvisit) as bounces from pagebouncetemp as tbl, logsTable tk where tk.idvisit = tbl.idvisit group by tk.app_id,tk.path";
+//
+//            String pageEntranceSQL
+//                    = "select tk.app_id,tk.path,count(tk.idvisit) as entrances from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.mintime=tk.idtscr group by tk.app_id,tk.path";
+//
+//            String pageExitSQL
+//                    = "select tk.app_id,tk.path,count(tk.idvisit) as exits from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.maxtime=tk.idtscr group by tk.app_id,tk.path";
+            
 
-            String pageEntranceSQL
-                    = "select tk.app_id,tk.path,count(tk.idvisit) as entrances from (select idvisit,min(idtscr) as mintime from logsTable group by idvisit) as abc, logsTable tk where abc.idvisit=tk.idvisit and abc.mintime=tk.idtscr group by tk.app_id,tk.path";
-
-            String pageExitSQL
-                    = "select tk.app_id,tk.path,count(tk.idvisit) as exits from (select idvisit,max(idtscr) as maxtime from logsTable group by idvisit) as abc, logsTable tk where abc.idvisit=tk.idvisit and abc.maxtime=tk.idtscr group by tk.app_id,tk.path";
-
+            
+            
+            
             String pageTotalTimeSQL
                     = "select app_id,path_duration,SUM(duration) as total_time_on_page from logsTable group by app_id,path_duration";
 
@@ -241,22 +259,40 @@ public class ZLogAnalyzer implements Serializable {
             String appTotalVisitorSQL
                     = "Select app_id,count(distinct id) as total_visitor from logsTable group by app_id";
 
-            String appReturnVisitorSQL
-                    = "Select app_id,count(id) as return_visitor from (Select app_id,id from logsTable group by app_id,id having min(new_visitor)=0) as tlbTmp group by app_id";
+            
+            String appReturnVisitorTempSQL
+                    = "Select app_id,id from logsTable group by app_id,id having min(new_visitor)=0";
+            
+//            String appReturnVisitorSQL
+//                    = "Select app_id,count(id) as return_visitor from appreturnvisitortemp as tlbTmp group by app_id";
 
-            DataFrame page = sqlContext.sql(pageSQL);
-            DataFrame pageBounds = sqlContext.sql(pageBoundSQL);
-            DataFrame pageEntrances = sqlContext.sql(pageEntranceSQL);
-            DataFrame pageExits = sqlContext.sql(pageExitSQL);
+
+            DataFrame page = sqlContext.sql(PAGE_SQL);
+            
+            DataFrame pageBouncesTemp = sqlContext.sql(PAGE_BOUNCE_TEMP_SQL);
+            //pageBouncesTemp.registerTempTable("pagebouncetemp");
+            DataFrame pageEntranceAndExitTemp = sqlContext.sql(pageEntranceAndExitTempSQL).persist(StorageLevel.MEMORY_AND_DISK_SER_2());
+            //pageEntranceAndExitTemp.registerTempTable("pageentranceandexittemp");
+            
+//            DataFrame pageBounds = sqlContext.sql(pageBoundSQL);
+//            DataFrame pageEntrances = sqlContext.sql(pageEntranceSQL);
+//            DataFrame pageExits = sqlContext.sql(pageExitSQL);
+            
+            
+            
             DataFrame pageTotalTime = sqlContext.sql(pageTotalTimeSQL);
 
             DataFrame app = sqlContext.sql(appSQL);
             DataFrame appUniquePageviews = page.groupBy("app_id").sum("unique_pageviews");
             DataFrame appTotalVisitor = sqlContext.sql(appTotalVisitorSQL);
-            DataFrame appReturnVisitor = sqlContext.sql(appReturnVisitorSQL);
-            DataFrame appBounds = pageBounds.groupBy("app_id").sum("bounces");
-            DataFrame appEntrances = pageEntrances.groupBy("app_id").sum("entrances");
-            DataFrame appExits = pageExits.groupBy("app_id").sum("exits");
+            
+            DataFrame appReturnVisitorTemp = sqlContext.sql(appReturnVisitorTempSQL);
+            //appReturnVisitorTemp.registerTempTable("appreturnvisitortemp");
+            
+//            DataFrame appReturnVisitor = sqlContext.sql(appReturnVisitorSQL);
+//            DataFrame appBounds = pageBounds.groupBy("app_id").sum("bounces");
+//            DataFrame appEntrances = pageEntrances.groupBy("app_id").sum("entrances");
+//            DataFrame appExits = pageExits.groupBy("app_id").sum("exits");
             DataFrame appTime = pageTotalTime.groupBy("app_id").sum("total_time_on_page");
 
             DataFrame os = sqlContext.sql(OS_SQL);
@@ -288,31 +324,56 @@ public class ZLogAnalyzer implements Serializable {
                     return result.toString();
                 }
             }).saveAsTextFile(tempFolder + "page");
-
-            pageBounds.toJavaRDD().map(new Function<Row, String>() {
-
-                @Override
-                public String call(Row t1) {
-                    return pageFormat(t1);
-                }
-            }).saveAsTextFile(tempFolder + "pagebounces");
-
-            pageEntrances.toJavaRDD().map(new Function<Row, String>() {
+            
+            
+            pageBouncesTemp.toJavaRDD().map(new Function<Row, String>() {
 
                 @Override
-                public String call(Row t1) {
-                    return pageFormat(t1);
+                public String call(Row row) {
+                    StringBuilder result = new StringBuilder();
+                    result.append(row.getString(0));
+                    return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "pageentrances");
-
-            pageExits.toJavaRDD().map(new Function<Row, String>() {
+            }).saveAsTextFile(tempFolder + "pagebouncetemp");
+            
+            pageEntranceAndExitTemp.toJavaRDD().map(new Function<Row, String>() {
 
                 @Override
-                public String call(Row t1) {
-                    return pageFormat(t1);
+                public String call(Row row) {
+                    StringBuilder result = new StringBuilder();
+                    result.append(row.getString(0)).append(" ");
+                    result.append(row.getLong(1)).append(" ");
+                    result.append(row.getLong(2));
+                    return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "pageexits");
+            }).saveAsTextFile(tempFolder + "pageentranceandexittemp");
 
+//            pageBounds.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return pageFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "pagebounces");
+//
+//            pageEntrances.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return pageFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "pageentrances");
+//
+//            pageExits.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return pageFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "pageexits");
+
+            pageEntranceAndExitTemp.unpersist();
+            
             pageTotalTime.toJavaRDD().map(new Function<Row, String>() {
 
                 @Override
@@ -335,14 +396,27 @@ public class ZLogAnalyzer implements Serializable {
                     return result.toString();
                 }
             }).saveAsTextFile(tempFolder + "app");
-
-            appReturnVisitor.toJavaRDD().map(new Function<Row, String>() {
+            
+            
+            
+            appReturnVisitorTemp.toJavaRDD().map(new Function<Row, String>() {
 
                 @Override
-                public String call(Row t1) {
-                    return appTotalFormat(t1);
+                public String call(Row row) {
+                    StringBuilder result = new StringBuilder();
+                    result.append(row.getString(0)).append(" ");
+                    result.append(row.getString(1));
+                    return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + "appreturnvisitor");
+            }).saveAsTextFile(tempFolder + "appreturnvisitortemp");
+
+//            appReturnVisitor.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return appTotalFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "appreturnvisitor");
 
             appTotalVisitor.toJavaRDD().map(new Function<Row, String>() {
 
@@ -360,31 +434,31 @@ public class ZLogAnalyzer implements Serializable {
                 }
             }).saveAsTextFile(tempFolder + "appuniquepageview");
 
-            appBounds.toJavaRDD().map(new Function<Row, String>() {
-
-                @Override
-                public String call(Row t1) {
-                    return appTotalFormat(t1);
-                }
-            }).saveAsTextFile(tempFolder + "appbounce");
-
-        
-            
-            appEntrances.toJavaRDD().map(new Function<Row, String>() {
-
-                @Override
-                public String call(Row t1) {
-                    return appTotalFormat(t1);
-                }
-            }).saveAsTextFile(tempFolder + "appentrances");
-
-            appExits.toJavaRDD().map(new Function<Row, String>() {
-
-                @Override
-                public String call(Row t1) {
-                    return appTotalFormat(t1);
-                }
-            }).saveAsTextFile(tempFolder + "appexits");
+//            appBounds.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return appTotalFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "appbounce");
+//
+//        
+//            
+//            appEntrances.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return appTotalFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "appentrances");
+//
+//            appExits.toJavaRDD().map(new Function<Row, String>() {
+//
+//                @Override
+//                public String call(Row t1) {
+//                    return appTotalFormat(t1);
+//                }
+//            }).saveAsTextFile(tempFolder + "appexits");
 
             appTime.toJavaRDD().map(new Function<Row, String>() {
 
@@ -449,6 +523,11 @@ public class ZLogAnalyzer implements Serializable {
                     return result.toString();
                 }
             }).saveAsTextFile(tempFolder + "referal");
+            
+            
+            
+            
+            analyzePhase2(sparkContext, sqlContext, tempFolder);
 
             
             dataFrame.unpersist();
@@ -458,9 +537,8 @@ public class ZLogAnalyzer implements Serializable {
 
             
             //sparkContext.close();
-            sparkContext.stop();
+            sparkContext.stop();            
             
-            //analyzeDone = true;
             System.err.println(TAG + "analyze raw log time: " + new SimpleDateFormat("hh:mm:ss").format(new Date(time)));
 
         } catch (Exception e) {
@@ -469,9 +547,127 @@ public class ZLogAnalyzer implements Serializable {
         }
     }
     
-    public boolean analyzeDone(){
-        return analyzeDone;
-    }
+    
+    public void analyzePhase2(JavaSparkContext sparkContext, SQLContext sqlContext, String tempFolder){
+        try {
+            JavaRDD<ZPageBounceTempObj> pageBounceTempRdd = sparkContext.textFile(tempFolder+"pagebouncetemp")
+                    .map(new Function<String, ZPageBounceTempObj>() {
+
+                        @Override
+                        public ZPageBounceTempObj call(String t1) {
+                            return ZPageBounceTempObj.parseFromLogLine(t1);
+                        }
+                    });
+            JavaRDD<ZPageEntranceAndExitTempObj> pageEntranceAndExitTempRdd = sparkContext.textFile(tempFolder+"pageentranceandexittemp")
+                    .map(new Function<String, ZPageEntranceAndExitTempObj>() {
+
+                        @Override
+                        public ZPageEntranceAndExitTempObj call(String t1) {
+                            return ZPageEntranceAndExitTempObj.parseFromLogLine(t1);
+                        }
+                    });
+            
+            JavaRDD<ZAppReturnVisitorTempObj> appReturnVisitorTempRdd = sparkContext.textFile(tempFolder+"appreturnvisitortemp")
+                    .map(new Function<String, ZAppReturnVisitorTempObj>() {
+
+                        @Override
+                        public ZAppReturnVisitorTempObj call(String t1) {
+                            return ZAppReturnVisitorTempObj.parseFromLogLine(t1);
+                        }
+                    });
+            sqlContext.createDataFrame(pageBounceTempRdd, ZPageBounceTempObj.class).registerTempTable("pagebouncetemp");
+            sqlContext.createDataFrame(pageEntranceAndExitTempRdd, ZPageEntranceAndExitTempObj.class).registerTempTable("pageentranceandexittemp");
+            sqlContext.createDataFrame(appReturnVisitorTempRdd, ZAppReturnVisitorTempObj.class).registerTempTable("appreturnvisitortemp");
+            
+            
+            String pageBoundSQL
+                    = "select tk.app_id,tk.path,COUNT(tk.idvisit) as bounces from pagebouncetemp as tbl, logsTable tk where tk.idvisit = tbl.idvisit group by tk.app_id,tk.path";
+
+            String pageEntranceSQL
+                    = "select tk.app_id,tk.path,count(tk.idvisit) as entrances from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.mintime=tk.idtscr group by tk.app_id,tk.path";
+
+            String pageExitSQL
+                    = "select tk.app_id,tk.path,count(tk.idvisit) as exits from pageentranceandexittemp as temp, logsTable tk where temp.idvisit=tk.idvisit and temp.maxtime=tk.idtscr group by tk.app_id,tk.path";
+            
+            String appReturnVisitorSQL
+                    = "Select app_id,count(id) as return_visitor from appreturnvisitortemp as tlbTmp group by app_id";
+            
+            DataFrame pageBounds = sqlContext.sql(pageBoundSQL);
+            DataFrame pageEntrances = sqlContext.sql(pageEntranceSQL);
+            DataFrame pageExits = sqlContext.sql(pageExitSQL);
+            
+            DataFrame appReturnVisitor = sqlContext.sql(appReturnVisitorSQL);
+            DataFrame appBounds = pageBounds.groupBy("app_id").sum("bounces");
+            DataFrame appEntrances = pageEntrances.groupBy("app_id").sum("entrances");
+            DataFrame appExits = pageExits.groupBy("app_id").sum("exits");
+            
+            
+            //save page
+            pageBounds.toJavaRDD().map(new Function<Row, String>() {
+
+                @Override
+                public String call(Row t1) {
+                    return pageFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "pagebounces");
+
+            pageEntrances.toJavaRDD().map(new Function<Row, String>() {
+
+                @Override
+                public String call(Row t1) {
+                    return pageFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "pageentrances");
+
+            pageExits.toJavaRDD().map(new Function<Row, String>() {
+
+                @Override
+                public String call(Row t1) {
+                    return pageFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "pageexits");
+            
+            //save app
+            appReturnVisitor.toJavaRDD().map(new Function<Row, String>() {
+//
+                @Override
+                public String call(Row t1) {
+                    return appTotalFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "appreturnvisitor");
+            
+            
+            appBounds.toJavaRDD().map(new Function<Row, String>() {
+
+                @Override
+                public String call(Row t1) {
+                    return appTotalFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "appbounce");
+
+        
+            
+            appEntrances.toJavaRDD().map(new Function<Row, String>() {
+
+                @Override
+                public String call(Row t1) {
+                    return appTotalFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "appentrances");
+
+            appExits.toJavaRDD().map(new Function<Row, String>() {
+
+                @Override
+                public String call(Row t1) {
+                    return appTotalFormat(t1);
+                }
+            }).saveAsTextFile(tempFolder + "appexits");            
+            
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }   
 
     public void joinTempFileAndWriteToDB(String tmpFolder) {
         try {
@@ -652,6 +848,9 @@ public class ZLogAnalyzer implements Serializable {
                             return ZReferalObj.parseFromLogLine(line);
                         }
                     });
+            
+            JavaRDD<ZObject> referalRdd1 = sparkContext.textFile(tmpFolder + "referal")
+                    .map(new parseLogFunc(TestObj.class));
 
             /*
              *join table and write to db
@@ -727,6 +926,8 @@ public class ZLogAnalyzer implements Serializable {
     public static ZLogAnalyzer getInstance() {
         return instance;
     }
+    
+    
 
     public String appTotalFormat(Row row) {
         StringBuilder result = new StringBuilder();
@@ -750,28 +951,30 @@ public class ZLogAnalyzer implements Serializable {
         result.append(row.getLong(2));
         return result.toString();
     }
+    
+    
 
     public static void main(String... args) {
         try {
             String logPath = "/home/datbt/workspace/ZALogStatistic/ZAlog1";
-            if (args.length < 2)
-                return;
+//            if (args.length < 2)
+//                return;
+//            
+//            
+//            String tempFolder = args[0];
+//            int mode = Integer.parseInt(args[1]);
+//            //System.err.println(tempFolder + "\t" + mode);
+//            if (mode == 1)
+//                ZLogAnalyzer.getInstance().analyze(logPath, tempFolder);
+//            else 
+//                ZLogAnalyzer.getInstance().joinTempFileAndWriteToDB(tempFolder);
             
             
-            String tempFolder = args[0];
-            int mode = Integer.parseInt(args[1]);
-            //System.err.println(tempFolder + "\t" + mode);
-            if (mode == 1)
-                ZLogAnalyzer.getInstance().analyze(logPath, tempFolder);
-            else 
-                ZLogAnalyzer.getInstance().joinTempFileAndWriteToDB(tempFolder);
             
-            
-            
-//            String tempFolder = String.valueOf(System.currentTimeMillis()) + "/";
-//            ZLogAnalyzer.getInstance().analyze(logPath, tempFolder);
-//            System.gc();
-//            ZLogAnalyzer.getInstance().joinTempFileAndWriteToDB(tempFolder);
+            String tempFolder = String.valueOf(System.currentTimeMillis()) + "/";
+            ZLogAnalyzer.getInstance().analyze(logPath, tempFolder);
+            System.gc();
+            ZLogAnalyzer.getInstance().joinTempFileAndWriteToDB(tempFolder);
                 
         } catch (Exception e) {
             e.printStackTrace();
@@ -796,6 +999,25 @@ public class ZLogAnalyzer implements Serializable {
 ////        System.gc();
 ////        statistic.joinTempFileAndWriteToDB(tempFolder);
 //        System.err.println("time = " + (System.currentTimeMillis() - now));
+    }
+    
+    class parseLogFunc implements Function<String, ZObject>{
+        private Class<ZObject> zObjClass;
+        
+        public parseLogFunc(Class zObjClass){
+            this.zObjClass = zObjClass;
+        }
+        
+        @Override
+        public ZObject call(String t1){
+            try {
+                zObjClass.newInstance().parseFromLogLine(t1);
+            } catch (InstantiationException | IllegalAccessException ex) {
+                ex.printStackTrace();
+            }
+            return null;
+        }
+        
     }
 
 }
