@@ -6,7 +6,6 @@
 package com.za.zobject;
 
 import java.io.Serializable;
-import java.sql.Timestamp;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,13 +13,16 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZPageBounceTempObj implements Serializable{
+public class ZPageBounceTempObj extends ZObject implements Serializable{
     private String idvisit;
 
     private static String TAG = "[tag]";
     
     public ZPageBounceTempObj(String idvisit) {
         this.idvisit = idvisit;
+    }
+
+    public ZPageBounceTempObj() {
     }
 
     public String getIdvisit() {
@@ -40,7 +42,8 @@ public class ZPageBounceTempObj implements Serializable{
             = "(\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZPageBounceTempObj parseFromLogLine(String logline) {
+    @Override
+    public ZPageBounceTempObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

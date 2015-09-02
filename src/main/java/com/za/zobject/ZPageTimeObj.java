@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZPageTimeObj implements Serializable{
+public class ZPageTimeObj extends ZObject implements Serializable{
     private String app_id;
     private String path;
     private long total_time_on_page;
@@ -24,6 +24,9 @@ public class ZPageTimeObj implements Serializable{
         this.app_id = app_id;
         this.path = path;
         this.total_time_on_page = Long.parseLong(time);
+    }
+
+    public ZPageTimeObj() {
     }
 
     public String getApp_id() {
@@ -55,7 +58,8 @@ public class ZPageTimeObj implements Serializable{
             = "(\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZPageTimeObj parseFromLogLine(String logline) {
+    @Override
+    public ZPageTimeObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

@@ -14,8 +14,7 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZPageObj implements Serializable{
-    private int id = 0;
+public class ZPageObj extends ZObject implements Serializable{
     private String app_id;
     private String path;
     private String date_tracking = new Timestamp(System.currentTimeMillis()).toString();
@@ -29,6 +28,9 @@ public class ZPageObj implements Serializable{
         this.path = path;
         this.pageviews = Integer.parseInt(pageviews);
         this.unique_pageviews = Integer.parseInt(unique_pageviews);
+    }
+
+    public ZPageObj() {
     }
 
     public String getApp_id() {
@@ -63,14 +65,6 @@ public class ZPageObj implements Serializable{
         this.unique_pageviews = unique_pageviews;
     }
 
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
     public String getDate_tracking() {
         return date_tracking;
     }
@@ -86,7 +80,8 @@ public class ZPageObj implements Serializable{
             = "(\\S+) (\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZPageObj parseFromLogLine(String logline) {
+    @Override
+    public ZPageObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

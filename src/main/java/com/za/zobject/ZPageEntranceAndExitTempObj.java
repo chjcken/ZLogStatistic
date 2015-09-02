@@ -6,7 +6,6 @@
 package com.za.zobject;
 
 import java.io.Serializable;
-import java.sql.Timestamp;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,7 +13,7 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZPageEntranceAndExitTempObj implements Serializable{
+public class ZPageEntranceAndExitTempObj extends ZObject implements Serializable{
     private String idvisit;
     private long mintime;
     private long maxtime;
@@ -25,6 +24,9 @@ public class ZPageEntranceAndExitTempObj implements Serializable{
         this.idvisit = idvisit;
         this.maxtime = Long.parseLong(maxtime);
         this.mintime = Long.parseLong(mintime);
+    }
+
+    public ZPageEntranceAndExitTempObj() {
     }
 
     public String getIdvisit() {
@@ -59,7 +61,8 @@ public class ZPageEntranceAndExitTempObj implements Serializable{
             = "(\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZPageEntranceAndExitTempObj parseFromLogLine(String logline) {
+    @Override
+    public ZPageEntranceAndExitTempObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

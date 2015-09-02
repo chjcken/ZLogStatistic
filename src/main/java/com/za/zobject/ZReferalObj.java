@@ -14,12 +14,11 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZReferalObj implements Serializable{
+public class ZReferalObj extends ZObject implements Serializable{
     private String app_id;
     private String url_ref;
     private int ref_type;
     private int sessions;
-    private int id = 0;
     private String date_tracking = new Timestamp(System.currentTimeMillis()).toString();
 
     private static String TAG = "[tag]";
@@ -29,6 +28,9 @@ public class ZReferalObj implements Serializable{
         this.sessions = Integer.parseInt(sessions);
         this.url_ref = url_ref;
         this.ref_type = Integer.parseInt(type);
+    }
+
+    public ZReferalObj() {
     }
 
     public String getApp_id() {
@@ -71,14 +73,6 @@ public class ZReferalObj implements Serializable{
         this.ref_type = ref_type;
     }
 
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
     public String getDate_tracking() {
         return date_tracking;
     }
@@ -93,7 +87,8 @@ public class ZReferalObj implements Serializable{
             = "(\\S+) (\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZReferalObj parseFromLogLine(String logline) {
+    @Override
+    public ZReferalObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

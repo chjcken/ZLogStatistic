@@ -14,11 +14,10 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZDeviceObj implements Serializable{
+public class ZDeviceObj extends ZObject implements Serializable{
     private String app_id;
     private String device_type;
     private int sessions;
-    private int id = 0;
     private String date_tracking = new Timestamp(System.currentTimeMillis()).toString();
 
     private static String TAG = "[tag]";
@@ -27,6 +26,9 @@ public class ZDeviceObj implements Serializable{
         this.app_id = app_id;
         this.sessions = Integer.parseInt(sessions);
         this.device_type = type;
+    }
+
+    public ZDeviceObj() {
     }
 
     public String getApp_id() {
@@ -53,14 +55,6 @@ public class ZDeviceObj implements Serializable{
         this.device_type = device_type;
     }
 
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
     public String getDate_tracking() {
         return date_tracking;
     }
@@ -77,7 +71,8 @@ public class ZDeviceObj implements Serializable{
             = "(\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZDeviceObj parseFromLogLine(String logline) {
+    @Override
+    public ZDeviceObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZAppExitObj implements Serializable{
+public class ZAppExitObj extends ZObject implements Serializable{
     private String app_id;
     private int exits;
 
@@ -24,6 +24,10 @@ public class ZAppExitObj implements Serializable{
         this.exits = Integer.parseInt(bounces);
     }
 
+    public ZAppExitObj() {
+    }
+    
+    
     public String getApp_id() {
         return app_id;
     }
@@ -46,7 +50,8 @@ public class ZAppExitObj implements Serializable{
             = "(\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZAppExitObj parseFromLogLine(String logline) {
+    @Override
+    public ZAppExitObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);

@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZLogObject implements Serializable{
+public class ZRawLogObject extends ZObject implements Serializable{
     private static final String TAG = "[ZLogObject]\t";
     
     private String id;
@@ -40,7 +40,7 @@ public class ZLogObject implements Serializable{
     private int duration;
     private String path_duration;
 
-    public ZLogObject(String id, String idsite, String action_name, String url, 
+    public ZRawLogObject(String id, String idsite, String action_name, String url, 
             String ref_type, String urlref, String idvc, String viewts, 
             String idts, String idtscr, String idvisit, String res, 
             String java, String fla, String new_visitor, String ct_code, 
@@ -69,6 +69,9 @@ public class ZLogObject implements Serializable{
         this.device_type = device;
         this.duration = Integer.parseInt(duration);
         this.path_duration = path_duration;
+    }
+
+    public ZRawLogObject() {
     }
 
     public String getId() {
@@ -261,14 +264,15 @@ public class ZLogObject implements Serializable{
             = "(\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZLogObject parseFromLogLine(String logline) {
+    @Override
+    public ZRawLogObject parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);
             throw new RuntimeException("Error parsing logline");
         }
 
-        return new ZLogObject(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5), 
+        return new ZRawLogObject(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5), 
                 m.group(6), m.group(7), m.group(8), m.group(9), m.group(10), m.group(11), 
                 m.group(12), m.group(13), m.group(14), m.group(15), m.group(16), m.group(17), 
                 m.group(18), m.group(19), m.group(20), m.group(21), m.group(22), m.group(23));

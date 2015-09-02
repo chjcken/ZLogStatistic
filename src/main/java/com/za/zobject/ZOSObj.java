@@ -14,8 +14,7 @@ import java.util.regex.Pattern;
  *
  * @author datbt
  */
-public class ZOSObj implements Serializable{
-    private int id = 0;
+public class ZOSObj extends ZObject implements Serializable{
     private String app_id;
     private String date_tracking = new Timestamp(System.currentTimeMillis()).toString();
     private String os_type;
@@ -28,13 +27,8 @@ public class ZOSObj implements Serializable{
         this.sessions = Integer.parseInt(sessions);
         this.os_type = type;
     }
-    
-    public int getId() {
-        return id;
-    }
 
-    public void setId(int id) {
-        this.id = id;
+    public ZOSObj() {
     }
 
     public String getApp_id() {
@@ -78,7 +72,8 @@ public class ZOSObj implements Serializable{
             = "(\\S+) (\\S+) (\\S+)";
     private static final Pattern PATTERN = Pattern.compile(LOG_ENTRY_PATTERN);
 
-    public static ZOSObj parseFromLogLine(String logline) {
+    @Override
+    public ZOSObj parseFromLogLine(String logline) {
         Matcher m = PATTERN.matcher(logline);
         if (!m.find()) {
             System.err.println(TAG + "error: cannot parse log" + logline);
