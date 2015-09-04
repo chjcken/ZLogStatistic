@@ -35,11 +35,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.Properties;
-import java.util.Timer;
-import java.util.TimerTask;
 import org.apache.commons.io.FileUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -73,8 +70,8 @@ public class ZLogAnalyzer implements Serializable {
         sparkConf = new SparkConf()
                 .setMaster(MASTER)
                 .setAppName(ZLogAnalyzer.class.getName())
-                .set("spark.executor.memory", "2g")
-                .set("spark.storage.memoryFraction", "0.4");
+                .set("spark.storage.memoryFraction", "0.5")
+                ;
 
         JavaSparkContext sparkContext;
         sparkContext = new JavaSparkContext(sparkConf);
@@ -88,9 +85,6 @@ public class ZLogAnalyzer implements Serializable {
 
     private void parseLogAndWriteDataToTemp(String logSource, String tempFolder,
             JavaSparkContext sparkContext, SQLContext sqlContext) {
-        if (logSource == null) {
-            throw new NullPointerException("logSource is null.");
-        }
 
         try {
             JavaRDD<ZObject> rawLogRdd = sparkContext.textFile(logSource)
@@ -144,7 +138,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(3));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + PAGE);
+            }).repartition(1).saveAsTextFile(tempFolder + PAGE);
 
             pageBouncesTemp.toJavaRDD().map(new Function<Row, String>() {
 
@@ -154,7 +148,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getString(0));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + PAGE_BOUNCE_TEMP);
+            }).repartition(1).saveAsTextFile(tempFolder + PAGE_BOUNCE_TEMP);
 
             pageEntranceAndExitTemp.toJavaRDD().map(new Function<Row, String>() {
 
@@ -166,12 +160,12 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(2));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + PAGE_ENTRANCE_AND_EXIT_TEMP);
+            }).repartition(1).saveAsTextFile(tempFolder + PAGE_ENTRANCE_AND_EXIT_TEMP);
 
             pageEntranceAndExitTemp.unpersist();
 
             pageTotalTime.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + PAGE_TOTAL_TIME);
+                    .repartition(1).saveAsTextFile(tempFolder + PAGE_TOTAL_TIME);
 
             /*
              * save app figure to temp file
@@ -186,7 +180,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(2));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + APP);
+            }).repartition(1).saveAsTextFile(tempFolder + APP);
 
             appReturnVisitorTemp.toJavaRDD().map(new Function<Row, String>() {
 
@@ -197,34 +191,34 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getString(1));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + APP_RETURN_VISITOR_TEMP);
+            }).repartition(1).saveAsTextFile(tempFolder + APP_RETURN_VISITOR_TEMP);
 
             appTotalVisitor.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_TOTAL_VISITOR);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_TOTAL_VISITOR);
 
             appUniquePageviews.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_UNIQUE_PAGEVIEW);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_UNIQUE_PAGEVIEW);
 
             appTime.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_TOTAL_TIME);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_TOTAL_TIME);
 
             /*
              * save other to temp
              */
             os.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + OS);
+                    .repartition(1).saveAsTextFile(tempFolder + OS);
 
             device.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + DEVICE);
+                    .repartition(1).saveAsTextFile(tempFolder + DEVICE);
 
             browser.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + BROWSER);
+                    .repartition(1).saveAsTextFile(tempFolder + BROWSER);
 
             location.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + LOCATION);
+                    .repartition(1).saveAsTextFile(tempFolder + LOCATION);
 
             language.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + LANGUAGE);
+                    .repartition(1).saveAsTextFile(tempFolder + LANGUAGE);
 
             referal.toJavaRDD().map(new Function<Row, String>() {
 
@@ -237,7 +231,7 @@ public class ZLogAnalyzer implements Serializable {
                     result.append(row.getLong(3));
                     return result.toString();
                 }
-            }).saveAsTextFile(tempFolder + REFERAL);
+            }).repartition(1).saveAsTextFile(tempFolder + REFERAL);
 
             readTempFileAndContinueCalculateData(tempFolder, sparkContext, sqlContext);
 
@@ -245,7 +239,6 @@ public class ZLogAnalyzer implements Serializable {
 
             long time = System.currentTimeMillis() - sparkContext.startTime();
 
-           
             System.err.println(TAG + "analyze raw log time: " + new SimpleDateFormat("hh:mm:ss").format(new Date(time)));
 
         } catch (Exception e) {
@@ -289,26 +282,26 @@ public class ZLogAnalyzer implements Serializable {
 
             //save page
             pageBounds.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + PAGE_BOUNCE);
+                    .repartition(1).saveAsTextFile(tempFolder + PAGE_BOUNCE);
 
             pageEntrances.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + PAGE_ENTRANCE);
+                    .repartition(1).saveAsTextFile(tempFolder + PAGE_ENTRANCE);
 
             pageExits.toJavaRDD().map(new PageAndOtherFormatFunction())
-                    .saveAsTextFile(tempFolder + PAGE_EXIT);
+                    .repartition(1).saveAsTextFile(tempFolder + PAGE_EXIT);
 
             //save app
             appReturnVisitor.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_RETURN_VISITOR);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_RETURN_VISITOR);
 
             appBounds.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_BOUNCE);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_BOUNCE);
 
             appEntrances.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_ENTRANCE);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_ENTRANCE);
 
             appExits.toJavaRDD().map(new AppFormatFunction())
-                    .saveAsTextFile(tempFolder + APP_EXIT);
+                    .repartition(1).saveAsTextFile(tempFolder + APP_EXIT);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -319,7 +312,10 @@ public class ZLogAnalyzer implements Serializable {
             SQLContext sqlContext) {
         try {
             long now = System.currentTimeMillis();
-//           
+//          
+            /*
+             * read result from temp file   
+             */
             JavaRDD<ZObject> pageRdd = sparkContext.textFile(tmpFolder + PAGE)
                     .map(new ParseLogFunction(new ZPageObj()));
 
@@ -438,7 +434,7 @@ public class ZLogAnalyzer implements Serializable {
             String url = "jdbc:mysql://localhost/zanalytics";
             Properties prop = new Properties();
             prop.setProperty("user", "root");
-            prop.setProperty("password", "qwe123");
+            prop.setProperty("password", "123456");
 
             appTable.write().mode(SaveMode.Append).jdbc(url, APP_OVERVIEW_TABLE, prop);
             pageTable.write().mode(SaveMode.Append).jdbc(url, PAGE_OVERVIEW_TABLE, prop);
@@ -448,8 +444,8 @@ public class ZLogAnalyzer implements Serializable {
             locationTable.write().mode(SaveMode.Append).jdbc(url, LOCATION, prop);
             languageTable.write().mode(SaveMode.Append).jdbc(url, LANGUAGE, prop);
             referalTable.write().mode(SaveMode.Append).jdbc(url, REFERAL, prop);
+            
             long time = System.currentTimeMillis() - now;
-
 
             System.err.println(TAG + "join and write to db time: " + new SimpleDateFormat("mm:ss:SSS").format(new Date(time)));
         } catch (Exception e) {
@@ -457,9 +453,48 @@ public class ZLogAnalyzer implements Serializable {
         }
     }
 
-    public void deleteTempFile(String tempFolder) throws IOException {
-        File temp = new File(tempFolder);
-        FileUtils.deleteDirectory(temp);
+    private void deleteTempFile(String tempFolder) {
+        try {
+            File temp = new File(tempFolder);
+            FileUtils.deleteDirectory(temp);
+            System.err.println(TAG + "delete temp dir /" + tempFolder);
+        } catch (IOException ex) {
+            System.err.println("Cannot delete temp file! " + ex.getMessage());
+        }
+    }
+
+    public void analyze(String logPath) {
+        String tempFolder = String.valueOf(System.currentTimeMillis()) + "/";
+        //init context
+        JavaSparkContext sparkContext;
+        SQLContext sqlContext;
+        sparkContext = initSparkContext();
+        sqlContext = new SQLContext(sparkContext);
+
+        //phase 1 -- parse log
+        parseLogAndWriteDataToTemp(logPath, tempFolder, sparkContext, sqlContext);
+
+        System.gc();
+
+        //phase 2 -- join result and write to db
+        joinResultTempFileAndWriteToDB(tempFolder, sparkContext, sqlContext);
+
+        //clean temp and exit
+        closeSpark(sparkContext);
+        deleteTempFile(tempFolder);
+    }
+
+    public static void main(String... args) {
+        long now = System.currentTimeMillis();
+        if (args.length < 1) {
+            throw new IllegalArgumentException("Missing log folder parameter!");
+        }
+
+        String logPath = args[0];
+
+        ZLogAnalyzer.getInstance().analyze(logPath);
+
+        System.err.println("analyze time: " + new SimpleDateFormat("hh:mm:ss").format(new Date(System.currentTimeMillis() - now)));
     }
 
     private class AppFormatFunction implements Function<Row, String> {
@@ -484,36 +519,6 @@ public class ZLogAnalyzer implements Serializable {
             return result.toString();
         }
     }
-
-    public void analyze(String logPath) {
-        String tempFolder = String.valueOf(System.currentTimeMillis()) + "/";
-        JavaSparkContext sparkContext;
-        SQLContext sqlContext;
-        sparkContext = initSparkContext();
-        sqlContext = new SQLContext(sparkContext);
-        parseLogAndWriteDataToTemp(logPath, tempFolder, sparkContext, sqlContext);
-
-        System.gc();
-
-        joinResultTempFileAndWriteToDB(tempFolder, sparkContext, sqlContext);
-
-        closeSpark(sparkContext);
-    }
-
-    public static void main(String... args) {
-        try {
-            long now = System.currentTimeMillis();
-            String logPath = "/home/datbt/workspace/ZALogStatistic/ZAlog1";
-
-            ZLogAnalyzer.getInstance().analyze(logPath);
-
-            System.err.println("analyze time: " + new SimpleDateFormat("hh:mm:ss").format(new Date(System.currentTimeMillis() - now)));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-
 
     private class ParseLogFunction implements Function<String, ZObject> {
 
